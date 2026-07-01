@@ -2,6 +2,8 @@
 
 > A compact cyberpunk neon **terminal arcade** — seven classic mini-games and a handful of retro Linux terminal toys, all inside a single self-contained `index.html`. No build tools, no dependencies, no CDNs. Just open the file.
 
+### [Play online →](https://atahan99.github.io/NeonArc/)
+
 ![NEONARC menu](screenshots/neonarc-menu.png)
 
 ## Overview
