@@ -156,8 +156,8 @@
 
   /* Game viewport */
   #viewport {
-    width: 46ch;
-    max-width: 52vw;
+    width: 50%;
+    min-width: 0;
     display: none;
     border: 1px solid var(--purple);
     border-radius: 8px;
@@ -166,7 +166,11 @@
     box-shadow: 0 0 14px rgba(164,91,255,0.25), inset 0 0 22px rgba(0,0,0,0.5);
     overflow: auto;
   }
-  #viewport.active { display: block; }
+  #viewport.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 
   /* Draggable splitter between terminal and viewport */
   .splitter {
@@ -419,6 +423,9 @@
     shell.activeGame = g;
     viewportEl.classList.add("active");
     splitterEl.classList.add("active");
+    // reset to the default equal (50/50) split on each launch
+    viewportEl.style.width = "";
+    viewportEl.style.maxWidth = "";
     clearTerminal();
     print("Launching " + g.name + "...", "c");
     g.start();
