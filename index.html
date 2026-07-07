@@ -250,9 +250,12 @@
   .status b { color: var(--cyan); }
 
   /* Scrollbars */
-  #terminal::-webkit-scrollbar, #viewport::-webkit-scrollbar { width: 8px; }
-  #terminal::-webkit-scrollbar-thumb, #viewport::-webkit-scrollbar-thumb {
-    background: rgba(0,240,255,0.4); border-radius: 8px;
+  #terminal::-webkit-scrollbar,
+  #viewport::-webkit-scrollbar { width: 8px; }
+  #terminal::-webkit-scrollbar-thumb,
+  #viewport::-webkit-scrollbar-thumb {
+    background: rgba(0,240,255,0.4);
+    border-radius: 8px;
   }
 
   @media (max-width: 720px) {
@@ -325,8 +328,7 @@
     terminalEl.scrollTop = terminalEl.scrollHeight;
   }
   function clearTerminal() { terminalEl.innerHTML = ""; }
-  function setScreen(text) { screenEl.textContent = text; }
-  function setScreenHTML(html) { screenEl.innerHTML = html; }
+  function setScreen(html) { screenEl.innerHTML = html; }
   function escHTML(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
@@ -342,61 +344,86 @@
     catch (e) { return def; }
   }
   function save(key, val) { try { localStorage.setItem(key, String(val)); } catch (e) {} }
+  function neonSpan(ch, col, glow) {
+    glow = glow === undefined ? 6 : glow;
+    return '<span style="color:' + col + ';text-shadow:0 0 ' + glow + 'px ' + col + '">' + ch + "</span>";
+  }
+  function moveCursor(e, pos, w, h, cb) {
+    var k = e.key.toLowerCase();
+    if (e.key === "ArrowUp" || k === "w") { pos.r = (pos.r + h - 1) % h; cb(); return true; }
+    if (e.key === "ArrowDown" || k === "s") { pos.r = (pos.r + 1) % h; cb(); return true; }
+    if (e.key === "ArrowLeft" || k === "a") { pos.c = (pos.c + w - 1) % w; cb(); return true; }
+    if (e.key === "ArrowRight" || k === "d") { pos.c = (pos.c + 1) % w; cb(); return true; }
+    return false;
+  }
+  function endScoreGame(title, score, best, key) {
+    if (score > best) { best = score; save(key, best); print("New best score: " + best + "!", "y"); }
+    print("GAME OVER - " + title + ". Score: " + score + " | Best: " + best, "r");
+    print("Type restart to play again, or quit for the menu.", "dim");
+    return best;
+  }
+  function gameTimer() {
+    var id = null;
+    return {
+      start: function (fn, ms) { clearInterval(id); id = setInterval(fn, ms); },
+      stop: function () { clearInterval(id); id = null; }
+    };
+  }
 
   // ---------- shell state ----------
-  var shell = {
-    mode: "menu",       // "menu" | "game"
-    activeGame: null,
-    booted: false
-  };
+  var shell = { mode: "menu", activeGame: null };
 
   var MENU_ORDER = ["snake", "tetris", "sudoku", "hanoi", "minesweeper", "2048", "hangman", "tictactoe"];
   var TOOL_ORDER = ["cmatrix", "cowsay", "pipes", "lolcat", "sl"];
-
-  var NAME_TO_ID = {
-    "1": "snake", "2": "tetris", "3": "sudoku", "4": "hanoi",
-    "5": "minesweeper", "6": "2048", "7": "hangman", "8": "tictactoe",
-    "9": "cmatrix", "10": "cowsay", "11": "pipes", "12": "lolcat", "13": "sl",
-    "snake": "snake",
-    "tetris": "tetris",
-    "sudoku": "sudoku",
-    "hanoi": "hanoi", "tower of hanoi": "hanoi",
-    "minesweeper": "minesweeper", "mines": "minesweeper",
-    "2048": "2048",
-    "hangman": "hangman",
-    "tictactoe": "tictactoe", "tic-tac-toe": "tictactoe", "tic tac toe": "tictactoe",
-    "ttt": "tictactoe", "xo": "tictactoe", "noughts": "tictactoe",
-    "cmatrix": "cmatrix", "matrix": "cmatrix",
-    "cowsay": "cowsay", "cow": "cowsay",
-    "pipes": "pipes",
-    "lolcat": "lolcat", "rainbow": "lolcat",
-    "sl": "sl", "train": "sl", "steam": "sl", "locomotive": "sl"
+  var ALIASES = {
+    "tower of hanoi": "hanoi", "mines": "minesweeper",
+    "tic-tac-toe": "tictactoe", "tic tac toe": "tictactoe", "ttt": "tictactoe",
+    "xo": "tictactoe", "noughts": "tictactoe",
+    "matrix": "cmatrix", "cow": "cowsay", "rainbow": "lolcat",
+    "train": "sl", "steam": "sl", "locomotive": "sl"
   };
+  var NAME_TO_ID = {};
+  MENU_ORDER.forEach(function (id, i) { NAME_TO_ID[String(i + 1)] = id; NAME_TO_ID[id] = id; });
+  TOOL_ORDER.forEach(function (id, i) {
+    NAME_TO_ID[String(MENU_ORDER.length + i + 1)] = id;
+    NAME_TO_ID[id] = id;
+  });
+  Object.keys(ALIASES).forEach(function (k) { NAME_TO_ID[k] = ALIASES[k]; });
 
-  // combined lookup: games + tools share the same item interface
   function getItem(id) { return GAMES[id] || TOOLS[id]; }
   function padLabel(n) { return ("[" + n + "]").padEnd(4, " "); }
 
   // ---------- menu / status ----------
-  function showMenu() {
-    print("");
-    print("NEONARC", "c");
-    print("");
-    print("Choose a game:");
-    print("");
-    for (var i = 0; i < MENU_ORDER.length; i++) {
-      print(padLabel(i + 1) + " " + GAMES[MENU_ORDER[i]].name, "g");
+  function printCatalog(mode) {
+    var i, j, g, t, line;
+    if (mode !== "tools") {
+      if (mode === "list") print("Games:", "c");
+      else { print(""); print("NEONARC", "c"); print(""); print("Choose a game:"); print(""); }
+      for (i = 0; i < MENU_ORDER.length; i++) {
+        g = GAMES[MENU_ORDER[i]];
+        line = padLabel(i + 1) + " " + g.name;
+        print((mode === "menu" ? line : "  " + line + " - " + g.description), "g");
+      }
+      print("");
     }
-    print("");
-    print("Linux tools:", "m");
-    print("");
-    for (var j = 0; j < TOOL_ORDER.length; j++) {
-      print(padLabel(MENU_ORDER.length + j + 1) + " " + TOOLS[TOOL_ORDER[j]].name, "p");
+    if (mode !== "games") {
+      print("Linux tools:", "m");
+      if (mode === "menu") print("");
+      for (j = 0; j < TOOL_ORDER.length; j++) {
+        t = TOOLS[TOOL_ORDER[j]];
+        line = padLabel(MENU_ORDER.length + j + 1) + " " + t.name;
+        print((mode === "menu" ? line : "  " + line + " - " + t.description), "p");
+      }
     }
-    print("");
-    print("Type a number, a name, or help.", "dim");
-    print("");
+    if (mode === "menu") {
+      print("");
+      print("Type a number, a name, or help.", "dim");
+      print("");
+    }
   }
+  function showMenu() { printCatalog("menu"); }
+  function listGames() { printCatalog("list"); }
+  function listTools() { printCatalog("tools"); }
 
   function updateStatus() {
     if (shell.mode === "game" && shell.activeGame) {
@@ -463,13 +490,13 @@
     "  restart           restart the current game/tool",
     "  play <name>       launch a game or tool (e.g. play cmatrix)",
     "",
-    "Quick launch: type a number 1-12 or a name.",
+    "Quick launch: type a number 1-13 or a name.",
     "Controls are shown when a game or tool starts."
   ].join("\n");
 
   var ABOUT_TEXT = [
     "NEONARC // cyberpunk terminal arcade",
-    "A compact neon cyberdeck running seven classic mini-games",
+    "A compact neon cyberdeck running eight classic mini-games",
     "plus a handful of retro Linux terminal toys, all inside a",
     "single self-contained terminal. No installs, no clutter.",
     "Type a number or name to jack in.",
@@ -590,9 +617,6 @@
   });
   window.addEventListener("focus", focusInput);
 
-  // keep the status bar live for real-time games (score updates on a timer)
-  setInterval(function () { if (shell.mode === "game") updateStatus(); }, 250);
-
   // ---------- draggable splitter (resize terminal / viewport) ----------
   (function initSplitter() {
     var dragging = false;
@@ -633,7 +657,8 @@
   GAMES.snake = (function () {
     var W = 24, H = 15;
     var BEST_KEY = "neonarc.snake.best";
-    var snake, dir, nextDir, food, score, best, over, timer, started;
+    var TICK = 130;
+    var snake, dir, nextDir, food, score, best, over, tick = gameTimer();
 
     function place() {
       while (true) {
@@ -668,20 +693,18 @@
         snake.pop();
       }
       render();
+      updateStatus();
     }
     function gameOver() {
       over = true;
-      clearInterval(timer); timer = null;
-      if (score > best) { best = score; save(BEST_KEY, best); print("New best score: " + best + "!", "y"); }
+      tick.stop();
+      best = endScoreGame("Snake", score, best, BEST_KEY);
       render();
-      print("GAME OVER - Snake. Score: " + score + " | Best: " + best, "r");
-      print("Type restart to play again, or quit for the menu.", "dim");
     }
     var COL = { head: "#00f0ff", body: "#a45bff", food: "#ffd166" };
     function glyph(ch) {
       var col = ch === "@" ? COL.head : ch === "o" ? COL.body : ch === "*" ? COL.food : null;
-      if (!col) return ch;
-      return '<span style="color:' + col + ';text-shadow:0 0 7px ' + col + '">' + ch + "</span>";
+      return col ? neonSpan(ch, col, 7) : ch;
     }
     function render() {
       var grid = [];
@@ -702,22 +725,18 @@
       out += "\nScore: " + score + "   Best: " + best + "\n";
       out += glyph("@") + " head  " + glyph("o") + " body  " + glyph("*") + " food\n";
       if (over) out += "\n  >> GAME OVER <<\n";
-      setScreenHTML(out);
+      setScreen(out);
     }
+    function begin() { reset(); render(); tick.start(step, TICK); }
     return {
-      id: "snake", name: "Snake", description: "Classic neon snake.",
+      name: "Snake", description: "Classic neon snake.",
       start: function () {
-        reset(); render();
+        begin();
         print("SNAKE // eat the * to grow. Don't hit walls or yourself.", "c");
         print("Controls: Arrow keys / WASD = move | restart | quit", "dim");
-        started = true;
-        clearInterval(timer);
-        timer = setInterval(step, 130);
       },
-      stop: function () { clearInterval(timer); timer = null; },
-      restart: function () { this.stop(); reset(); render(); print("Snake restarted.", "m"); clearInterval(timer); timer = setInterval(step, 130); },
-      render: render,
-      update: step,
+      stop: function () { tick.stop(); },
+      restart: function () { tick.stop(); begin(); print("Snake restarted.", "m"); },
       handleKey: function (e) {
         var k = e.key.toLowerCase();
         var nd = null;
@@ -726,7 +745,6 @@
         else if (e.key === "ArrowLeft" || k === "a") nd = { x: -1, y: 0 };
         else if (e.key === "ArrowRight" || k === "d") nd = { x: 1, y: 0 };
         if (!nd) return false;
-        // prevent instant reverse
         if (nd.x === -dir.x && nd.y === -dir.y) return true;
         nextDir = nd;
         return true;
@@ -749,12 +767,11 @@
       L: [[0, 0, 1], [1, 1, 1]]
     };
     var KEYS = ["I", "O", "T", "S", "Z", "J", "L"];
-    // per-piece neon colors, all distinct from the green border
     var PIECE_COLORS = {
       I: "#00f0ff", O: "#ffd166", T: "#a45bff", S: "#9dff3d",
       Z: "#ff5470", J: "#6ea8ff", L: "#ff9f45"
     };
-    var board, cur, score, lines, level, best, over, timer;
+    var board, cur, score, lines, level, best, over, tick = gameTimer();
 
     function rotateCW(m) {
       var rows = m.length, cols = m[0].length;
@@ -813,23 +830,20 @@
       }
     }
     function setSpeed() {
-      clearInterval(timer);
-      var ms = Math.max(120, 620 - (level - 1) * 60);
-      timer = setInterval(tick, ms);
+      tick.start(tickFn, Math.max(120, 620 - (level - 1) * 60));
     }
-    function tick() {
+    function tickFn() {
       if (over) return;
       if (!collide(cur.m, cur.x, cur.y + 1)) { cur.y++; }
       else { lock(); }
       render();
+      updateStatus();
     }
     function endGame() {
       over = true;
-      clearInterval(timer); timer = null;
-      if (score > best) { best = score; save(BEST_KEY, best); print("New best score: " + best + "!", "y"); }
+      tick.stop();
+      best = endScoreGame("Tetris", score, best, BEST_KEY);
       render();
-      print("GAME OVER - Tetris. Score: " + score + " | Best: " + best, "r");
-      print("Type restart to play again, or quit for the menu.", "dim");
     }
     function reset() {
       board = [];
@@ -856,7 +870,7 @@
           var v = grid[rr][cc];
           if (v) {
             var col = PIECE_COLORS[v] || "#3dff9a";
-            line += '<span style="color:' + col + ';text-shadow:0 0 6px ' + col + '">[]</span>';
+            line += neonSpan("[]", col);
           } else {
             line += " .";
           }
@@ -866,20 +880,18 @@
       out += top + "\n";
       out += "\nScore: " + score + "\nLevel: " + level + "   Lines: " + lines + "\nBest:  " + best + "\n";
       if (over) out += "\n  >> GAME OVER <<\n";
-      setScreenHTML(out);
+      setScreen(out);
     }
+    function begin() { reset(); render(); setSpeed(); }
     return {
-      id: "tetris", name: "Tetris", description: "Stack and clear neon blocks.",
+      name: "Tetris", description: "Stack and clear neon blocks.",
       start: function () {
-        reset(); render();
+        begin();
         print("TETRIS // clear full rows. Don't stack to the top.", "c");
         print("Controls: Left/Right or A/D = move | Down/S = soft drop | Up/W/Space = rotate | restart | quit", "dim");
-        setSpeed();
       },
-      stop: function () { clearInterval(timer); timer = null; },
-      restart: function () { this.stop(); reset(); render(); print("Tetris restarted.", "m"); setSpeed(); },
-      render: render,
-      update: tick,
+      stop: function () { tick.stop(); },
+      restart: function () { tick.stop(); begin(); print("Tetris restarted.", "m"); },
       handleKey: function (e) {
         if (over) return false;
         var k = e.key.toLowerCase();
@@ -909,7 +921,6 @@
 
   /* ---------------- SUDOKU ---------------- */
   GAMES.sudoku = (function () {
-    // 0 = empty. One built-in puzzle.
     var PUZZLE = [
       5, 3, 0, 0, 7, 0, 0, 0, 0,
       6, 0, 0, 1, 9, 5, 0, 0, 0,
@@ -921,12 +932,14 @@
       0, 0, 0, 4, 1, 9, 0, 0, 5,
       0, 0, 0, 0, 8, 0, 0, 7, 9
     ];
-    var board, given, cr, cc, message;
+    var BORDER = "+---------+---------+---------+";
+    var board, given, cursor, message;
 
     function reset() {
       board = PUZZLE.slice();
       given = PUZZLE.map(function (v) { return v !== 0; });
-      cr = 0; cc = 0; message = "";
+      cursor = { r: 0, c: 0 };
+      message = "";
     }
     function idx(r, c) { return r * 9 + c; }
     function conflict(r, c) {
@@ -953,69 +966,58 @@
       return true;
     }
     var COL = { clue: "#00f0ff", entry: "#ffd166", dup: "#ff5470", empty: "#5a6b7a" };
-    function span(ch, col) {
-      return '<span style="color:' + col + ';text-shadow:0 0 6px ' + col + '">' + ch + "</span>";
-    }
     function render() {
-      var border = "+";
-      for (var b = 0; b < 3; b++) border += "-".repeat(9) + "+";
       var out = "";
       for (var r = 0; r < 9; r++) {
-        if (r % 3 === 0) out += border + "\n";
+        if (r % 3 === 0) out += BORDER + "\n";
         var line = "|";
         for (var c = 0; c < 9; c++) {
           var v = board[idx(r, c)];
           var inner;
-          if (v === 0) inner = span(".", COL.empty);
+          if (v === 0) inner = neonSpan(".", COL.empty);
           else {
             var col = conflict(r, c) ? COL.dup : given[idx(r, c)] ? COL.clue : COL.entry;
-            inner = span(String(v), col);
+            inner = neonSpan(String(v), col);
           }
-          if (r === cr && c === cc) line += "[" + inner + "]";
+          if (r === cursor.r && c === cursor.c) line += "[" + inner + "]";
           else line += " " + inner + " ";
           if (c % 3 === 2) line += "|";
         }
         out += line + "\n";
       }
-      out += border + "\n";
-      out += "\nCursor: R" + (cr + 1) + " C" + (cc + 1) + "\n";
-      out += "[x] cursor   " + span("clue", COL.clue) + "   " +
-             span("entry", COL.entry) + "   " + span("dup", COL.dup) + "\n";
+      out += BORDER + "\n";
+      out += "\nCursor: R" + (cursor.r + 1) + " C" + (cursor.c + 1) + "\n";
+      out += "[x] cursor   " + neonSpan("clue", COL.clue) + "   " +
+             neonSpan("entry", COL.entry) + "   " + neonSpan("dup", COL.dup) + "\n";
       if (message) out += "\n" + message + "\n";
-      setScreenHTML(out);
+      setScreen(out);
     }
+    function moveRender() { message = ""; render(); }
     return {
-      id: "sudoku", name: "Sudoku", description: "Fill the 9x9 grid.",
+      name: "Sudoku", description: "Fill the 9x9 grid.",
       start: function () {
         reset(); render();
         print("SUDOKU // fill every row, column and 3x3 box with 1-9.", "c");
         print("Controls: Arrows/WASD = move | 1-9 = enter | 0/Backspace/Delete = clear | restart | quit", "dim");
       },
-      stop: function () {},
       restart: function () { reset(); render(); print("Sudoku restarted.", "m"); },
-      render: render,
-      update: function () {},
       handleKey: function (e) {
-        var k = e.key.toLowerCase();
-        if (e.key === "ArrowUp" || k === "w") { cr = (cr + 8) % 9; message = ""; render(); return true; }
-        if (e.key === "ArrowDown" || k === "s") { cr = (cr + 1) % 9; message = ""; render(); return true; }
-        if (e.key === "ArrowLeft" || k === "a") { cc = (cc + 8) % 9; message = ""; render(); return true; }
-        if (e.key === "ArrowRight" || k === "d") { cc = (cc + 1) % 9; message = ""; render(); return true; }
+        if (moveCursor(e, cursor, 9, 9, moveRender)) return true;
         if (/^[1-9]$/.test(e.key)) {
-          if (given[idx(cr, cc)]) { message = "That cell is a fixed clue."; render(); return true; }
-          board[idx(cr, cc)] = Number(e.key);
-          message = conflict(cr, cc) ? "Duplicate in row/column/box." : "";
+          if (given[idx(cursor.r, cursor.c)]) { message = "That cell is a fixed clue."; render(); return true; }
+          board[idx(cursor.r, cursor.c)] = Number(e.key);
+          message = conflict(cursor.r, cursor.c) ? "Duplicate in row/column/box." : "";
           render();
           if (isWin()) { print("SOLVED! Sudoku complete. Nice work.", "y"); }
           return true;
         }
         if (e.key === "0" || e.key === "Backspace" || e.key === "Delete") {
-          if (given[idx(cr, cc)]) { message = "That cell is a fixed clue."; render(); return true; }
-          board[idx(cr, cc)] = 0; message = ""; render(); return true;
+          if (given[idx(cursor.r, cursor.c)]) { message = "That cell is a fixed clue."; render(); return true; }
+          board[idx(cursor.r, cursor.c)] = 0; message = ""; render(); return true;
         }
         return false;
       },
-      statusText: function () { return "R" + (cr + 1) + " C" + (cc + 1); }
+      statusText: function () { return "R" + (cursor.r + 1) + " C" + (cursor.c + 1); }
     };
   })();
 
@@ -1039,9 +1041,7 @@
       var pad = width - piece.length;
       var left = Math.floor(pad / 2), right = pad - left;
       var col = DISK_COLORS[disk] || "#00f0ff";
-      return " ".repeat(left) +
-        '<span style="color:' + col + ';text-shadow:0 0 7px ' + col + '">' + piece + "</span>" +
-        " ".repeat(right);
+      return " ".repeat(left) + neonSpan(piece, col, 7) + " ".repeat(right);
     }
     function render() {
       var width = 2 * disks + 1;
@@ -1062,7 +1062,7 @@
       out += "\nDisks: " + disks + "   Moves: " + moves + "\n";
       out += "Move all disks to tower 3. Type e.g. \"1 3\".\n";
       if (won) out += "\n  >> SOLVED in " + moves + " moves! <<\n";
-      setScreenHTML(out);
+      setScreen(out);
     }
     function move(from, to) {
       if (won) { print("Already solved. Type restart or quit.", "dim"); return; }
@@ -1083,13 +1083,12 @@
       }
     }
     return {
-      id: "hanoi", name: "Tower of Hanoi", description: "Move the stack, one disk at a time.",
+      name: "Tower of Hanoi", description: "Move the stack, one disk at a time.",
       start: function () {
         reset(3); render();
         print("TOWER OF HANOI // move the whole stack to tower 3.", "c");
         print("Controls: type \"1 3\" to move top disk from tower 1 to 3 | restart | restart 4 | quit", "dim");
       },
-      stop: function () {},
       restart: function (arg) {
         var n = parseInt(arg, 10);
         if (isNaN(n)) n = 3;
@@ -1097,13 +1096,9 @@
         reset(n); render();
         print("Tower of Hanoi restarted with " + n + " disks.", "m");
       },
-      render: render,
-      update: function () {},
-      handleKey: function () { return false; },
       handleCommand: function (cmd) {
         var m = cmd.match(/^\s*([1-3])\s+([1-3])\s*$/);
         if (m) { move(Number(m[1]) - 1, Number(m[2]) - 1); return true; }
-        // consume number-only inputs so they don't relaunch a game by number
         if (/^[0-9\s]+$/.test(cmd)) { print("Invalid move. Use two towers, e.g. \"1 3\".", "y"); return true; }
         return false;
       },
@@ -1114,13 +1109,15 @@
   /* ---------------- MINESWEEPER ---------------- */
   GAMES.minesweeper = (function () {
     var SIZE = 8, MINES = 10;
-    var mine, revealed, flagged, adj, cr, cc, started, over, won, remaining;
+    var mine, revealed, flagged, adj, cursor, started, over, won, remaining, flagCount;
 
     function reset() {
       mine = []; revealed = []; flagged = []; adj = [];
       for (var i = 0; i < SIZE * SIZE; i++) { mine.push(false); revealed.push(false); flagged.push(false); adj.push(0); }
-      cr = 0; cc = 0; started = false; over = false; won = false;
+      cursor = { r: 0, c: 0 };
+      started = false; over = false; won = false;
       remaining = SIZE * SIZE - MINES;
+      flagCount = 0;
     }
     function idx(r, c) { return r * SIZE + c; }
     function inBounds(r, c) { return r >= 0 && r < SIZE && c >= 0 && c < SIZE; }
@@ -1160,9 +1157,9 @@
     }
     function reveal() {
       if (over) return;
-      var i = idx(cr, cc);
+      var i = idx(cursor.r, cursor.c);
       if (flagged[i] || revealed[i]) return;
-      if (!started) placeMines(cr, cc);
+      if (!started) placeMines(cursor.r, cursor.c);
       if (mine[i]) {
         revealed[i] = true; over = true;
         render();
@@ -1170,7 +1167,7 @@
         print("Type restart to try again, or quit for the menu.", "dim");
         return;
       }
-      floodReveal(cr, cc);
+      floodReveal(cursor.r, cursor.c);
       render();
       if (remaining <= 0) {
         won = true; over = true;
@@ -1180,19 +1177,18 @@
     }
     function toggleFlag() {
       if (over) return;
-      var i = idx(cr, cc);
+      var i = idx(cursor.r, cursor.c);
       if (revealed[i]) return;
       flagged[i] = !flagged[i];
+      flagCount += flagged[i] ? 1 : -1;
       render();
+      updateStatus();
     }
     var NUM_COLORS = {
       1: "#00f0ff", 2: "#9dff3d", 3: "#ffd166", 4: "#ff9f45",
       5: "#ff5470", 6: "#ff2bd6", 7: "#a45bff", 8: "#ffffff"
     };
     var COL = { cursor: "#00f0ff", flag: "#ffd166", mine: "#ff5470", hidden: "#5a6b7a" };
-    function span(ch, col) {
-      return '<span style="color:' + col + ';text-shadow:0 0 6px ' + col + '">' + ch + "</span>";
-    }
     function render() {
       var out = "    ";
       for (var c = 0; c < SIZE; c++) out += " " + (c + 1) + " ";
@@ -1207,46 +1203,35 @@
           else if (!revealed[i]) { ch = "."; col = COL.hidden; }
           else if (adj[i] === 0) { ch = " "; col = null; }
           else { ch = String(adj[i]); col = NUM_COLORS[adj[i]]; }
-          if (r === cr && cc2 === cc) line += span("[" + ch + "]", COL.cursor);
-          else line += " " + (col ? span(ch, col) : ch) + " ";
+          if (r === cursor.r && cc2 === cursor.c) line += neonSpan("[" + ch + "]", COL.cursor);
+          else line += " " + (col ? neonSpan(ch, col) : ch) + " ";
         }
         line += "|";
         out += line + "\n";
       }
       out += "   +" + "---".repeat(SIZE) + "+\n";
-      var flags = flagged.filter(Boolean).length;
-      out += "\nMines: " + MINES + "   Flags: " + flags + "\n";
-      out += span("[x]", COL.cursor) + " cursor  " + span(".", COL.hidden) +
-             " hidden  " + span("F", COL.flag) + " flag  " + span("*", COL.mine) + " mine\n";
+      out += "\nMines: " + MINES + "   Flags: " + flagCount + "\n";
+      out += neonSpan("[x]", COL.cursor) + " cursor  " + neonSpan(".", COL.hidden) +
+             " hidden  " + neonSpan("F", COL.flag) + " flag  " + neonSpan("*", COL.mine) + " mine\n";
       if (won) out += "\n  >> YOU WIN <<\n";
       else if (over) out += "\n  >> GAME OVER <<\n";
-      setScreenHTML(out);
+      setScreen(out);
     }
     return {
-      id: "minesweeper", name: "Minesweeper", description: "Clear the field, avoid mines.",
+      name: "Minesweeper", description: "Clear the field, avoid mines.",
       start: function () {
         reset(); render();
         print("MINESWEEPER // reveal all safe cells. 10 mines hidden.", "c");
         print("Controls: Arrows/WASD = move | Enter/Space = reveal | F = flag | restart | quit", "dim");
       },
-      stop: function () {},
       restart: function () { reset(); render(); print("Minesweeper restarted.", "m"); },
-      render: render,
-      update: function () {},
       handleKey: function (e) {
-        var k = e.key.toLowerCase();
-        if (e.key === "ArrowUp" || k === "w") { cr = (cr + SIZE - 1) % SIZE; render(); return true; }
-        if (e.key === "ArrowDown" || k === "s") { cr = (cr + 1) % SIZE; render(); return true; }
-        if (e.key === "ArrowLeft" || k === "a") { cc = (cc + SIZE - 1) % SIZE; render(); return true; }
-        if (e.key === "ArrowRight" || k === "d") { cc = (cc + 1) % SIZE; render(); return true; }
-        if (e.key === "Enter" || e.key === " " || k === "spacebar") { reveal(); return true; }
-        if (k === "f") { toggleFlag(); return true; }
+        if (moveCursor(e, cursor, SIZE, SIZE, render)) return true;
+        if (e.key === "Enter" || e.key === " " || e.key.toLowerCase() === "spacebar") { reveal(); return true; }
+        if (e.key.toLowerCase() === "f") { toggleFlag(); return true; }
         return false;
       },
-      statusText: function () {
-        var flags = flagged.filter(Boolean).length;
-        return "FLAGS: " + flags + "/" + MINES;
-      }
+      statusText: function () { return "FLAGS: " + flagCount + "/" + MINES; }
     };
   })();
 
@@ -1335,10 +1320,8 @@
     }
     function endGame() {
       over = true;
-      if (score > best) { best = score; save(BEST_KEY, best); }
+      best = endScoreGame("2048", score, best, BEST_KEY);
       render();
-      print("GAME OVER - 2048. Score: " + score + " | Best: " + best, "r");
-      print("Type restart to play again, or quit for the menu.", "dim");
     }
     var TILE_COLORS = {
       2: "#00f0ff", 4: "#3dff9a", 8: "#ffd166", 16: "#ff9f45",
@@ -1352,10 +1335,7 @@
       var total = CW - s.length;
       var left = Math.floor(total / 2);
       var right = total - left;
-      var col = TILE_COLORS[v] || "#ff2bd6";
-      return " ".repeat(left) +
-        '<span style="color:' + col + ';text-shadow:0 0 8px ' + col + '">' + s + "</span>" +
-        " ".repeat(right);
+      return " ".repeat(left) + neonSpan(s, TILE_COLORS[v] || "#ff2bd6", 8) + " ".repeat(right);
     }
     function render() {
       var sep = "+" + ("-".repeat(CW) + "+").repeat(N);
@@ -1369,25 +1349,22 @@
       }
       out += "\nScore: " + score + "   Best: " + best + "\n";
       if (over) out += "\n  >> GAME OVER <<\n";
-      setScreenHTML(out);
+      setScreen(out);
     }
     return {
-      id: "2048", name: "2048", description: "Merge tiles to reach 2048.",
+      name: "2048", description: "Merge tiles to reach 2048.",
       start: function () {
         reset(); render();
         print("2048 // combine matching tiles. Reach the 2048 tile.", "c");
         print("Controls: Arrows/WASD = move tiles | restart | quit", "dim");
       },
-      stop: function () {},
       restart: function () { reset(); render(); print("2048 restarted.", "m"); },
-      render: render,
-      update: function () {},
       handleKey: function (e) {
         var k = e.key.toLowerCase();
-        if (e.key === "ArrowLeft" || k === "a") { move("left"); return true; }
-        if (e.key === "ArrowRight" || k === "d") { move("right"); return true; }
-        if (e.key === "ArrowUp" || k === "w") { move("up"); return true; }
-        if (e.key === "ArrowDown" || k === "s") { move("down"); return true; }
+        if (e.key === "ArrowLeft" || k === "a") { move("left"); updateStatus(); return true; }
+        if (e.key === "ArrowRight" || k === "d") { move("right"); updateStatus(); return true; }
+        if (e.key === "ArrowUp" || k === "w") { move("up"); updateStatus(); return true; }
+        if (e.key === "ArrowDown" || k === "s") { move("down"); updateStatus(); return true; }
         return false;
       },
       statusText: function () { return "SCORE: " + score + " | BEST: " + best; }
@@ -1447,23 +1424,19 @@
       out += "\nType a letter, then press Enter.\n";
       if (win) out += "\n  >> YOU WIN <<\n";
       else if (over) out += "\n  >> GAME OVER <<\n";
-      setScreen(out);
+      setScreen(escHTML(out));
     }
     return {
-      id: "hangman", name: "Hangman", description: "Guess the hidden word.",
+      name: "Hangman", description: "Guess the hidden word.",
       start: function () {
         reset(); render();
         print("HANGMAN // guess the word one letter at a time. 6 misses allowed.", "c");
         print("Controls: type a letter then Enter | restart = new word | quit", "dim");
       },
-      stop: function () {},
       restart: function () { reset(); render(); print("New word loaded.", "m"); },
-      render: render,
-      update: function () {},
-      handleKey: function () { return false; },
       handleCommand: function (cmd) {
         cmd = cmd.toLowerCase();
-        if (/^[a-z]$/.test(cmd)) { guess(cmd); return true; }
+        if (/^[a-z]$/.test(cmd)) { guess(cmd); updateStatus(); return true; }
         return false;
       },
       statusText: function () { return "TRIES: " + (maxWrong - wrong.length) + "/" + maxWrong; }
@@ -1480,9 +1453,6 @@
     var COL = { X: "#00f0ff", O: "#ff2bd6", cursor: "#ffd166", dim: "#5a6b7a", win: "#3dff9a" };
     var board, current, over, winner, winLine, cursor, scores;
 
-    function span(ch, col) {
-      return '<span style="color:' + col + ';text-shadow:0 0 7px ' + col + '">' + ch + "</span>";
-    }
     function reset() {
       board = new Array(9).fill(null);
       current = "X"; over = false; winner = null; winLine = null; cursor = 0;
@@ -1518,8 +1488,8 @@
       var v = board[i];
       var inWin = winLine && winLine.indexOf(i) !== -1;
       var glyph;
-      if (v) glyph = span(v, inWin ? COL.win : COL[v]);
-      else glyph = span(String(i + 1), COL.dim);
+      if (v) glyph = neonSpan(v, inWin ? COL.win : COL[v], 7);
+      else glyph = neonSpan(String(i + 1), COL.dim, 7);
       if (i === cursor && !over) return "[" + glyph + "]";
       return " " + glyph + " ";
     }
@@ -1531,34 +1501,31 @@
       }
       out += "\n";
       if (over) {
-        out += winner === "draw" ? "  Draw game.\n" : "  Player " + span(winner, COL[winner]) + " wins!\n";
+        out += winner === "draw" ? "  Draw game.\n" : "  Player " + neonSpan(winner, COL[winner], 7) + " wins!\n";
       } else {
-        out += "  Turn: " + span(current, COL[current]) + "\n";
+        out += "  Turn: " + neonSpan(current, COL[current], 7) + "\n";
       }
-      out += "\nScore   " + span("X", COL.X) + " " + scores.X +
-             "   " + span("O", COL.O) + " " + scores.O + "   draws " + scores.draws + "\n";
-      setScreenHTML(out);
+      out += "\nScore   " + neonSpan("X", COL.X, 7) + " " + scores.X +
+             "   " + neonSpan("O", COL.O, 7) + " " + scores.O + "   draws " + scores.draws + "\n";
+      setScreen(out);
     }
     return {
-      id: "tictactoe", name: "Tic-Tac-Toe", description: "Two-player X and O.",
+      name: "Tic-Tac-Toe", description: "Two-player X and O.",
       start: function () {
         scores = { X: 0, O: 0, draws: 0 };
         reset(); render();
         print("TIC-TAC-TOE // two players, X and O take turns.", "c");
         print("Controls: Arrows/WASD = move | 1-9 = place | Enter/Space = place at cursor | restart | quit", "dim");
       },
-      stop: function () {},
       restart: function () { reset(); render(); print("New round. Player X starts.", "m"); },
-      render: render,
-      update: function () {},
       handleKey: function (e) {
         var k = e.key.toLowerCase();
         if (e.key === "ArrowUp" || k === "w") { cursor = (cursor + 6) % 9; render(); return true; }
         if (e.key === "ArrowDown" || k === "s") { cursor = (cursor + 3) % 9; render(); return true; }
         if (e.key === "ArrowLeft" || k === "a") { cursor = (cursor % 3 === 0 ? cursor + 2 : cursor - 1); render(); return true; }
         if (e.key === "ArrowRight" || k === "d") { cursor = (cursor % 3 === 2 ? cursor - 2 : cursor + 1); render(); return true; }
-        if (e.key === "Enter" || e.key === " " || k === "spacebar") { place(cursor); return true; }
-        if (/^[1-9]$/.test(e.key)) { cursor = Number(e.key) - 1; place(cursor); return true; }
+        if (e.key === "Enter" || e.key === " " || k === "spacebar") { place(cursor); updateStatus(); return true; }
+        if (/^[1-9]$/.test(e.key)) { cursor = Number(e.key) - 1; place(cursor); updateStatus(); return true; }
         return false;
       },
       statusText: function () {
@@ -1576,9 +1543,9 @@
 
   /* ---------------- CMATRIX ---------------- */
   TOOLS.cmatrix = (function () {
-    var W = 34, H = 20, TRAIL = 9;
+    var W = 34, H = 20, TRAIL = 9, MS = 90;
     var CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*+=<>";
-    var chars, drops, timer;
+    var chars, drops, tick = gameTimer();
     function rnd() { return CHARS[(Math.random() * CHARS.length) | 0]; }
     function reset() {
       chars = []; drops = [];
@@ -1599,17 +1566,14 @@
         var head = drops[c];
         for (var k = 0; k < TRAIL; k++) {
           var yy = head - k;
-          if (yy >= 0 && yy < H) {
-            var col = shade(k);
-            grid[yy][c] = '<span style="color:' + col + ';text-shadow:0 0 6px ' + col + '">' + chars[yy][c] + "</span>";
-          }
+          if (yy >= 0 && yy < H) grid[yy][c] = neonSpan(chars[yy][c], shade(k));
         }
       }
       var out = "";
       for (var r = 0; r < H; r++) out += grid[r].join("") + "\n";
-      setScreenHTML(out);
+      setScreen(out);
     }
-    function tick() {
+    function step() {
       for (var i = 0; i < 6; i++) {
         var ry = (Math.random() * H) | 0, rx = (Math.random() * W) | 0;
         chars[ry][rx] = rnd();
@@ -1620,19 +1584,16 @@
       }
       render();
     }
+    function begin() { reset(); render(); tick.start(step, MS); }
     return {
-      id: "cmatrix", name: "cmatrix", description: "Falling neon code rain.", kind: "tool",
+      name: "cmatrix", description: "Falling neon code rain.", kind: "tool",
       start: function () {
-        reset(); render();
+        begin();
         print("cmatrix // the neon rain falls. There is no spoon.", "c");
         print("Controls: just watch | restart | quit", "dim");
-        clearInterval(timer); timer = setInterval(tick, 90);
       },
-      stop: function () { clearInterval(timer); timer = null; },
-      restart: function () { this.stop(); reset(); render(); clearInterval(timer); timer = setInterval(tick, 90); },
-      render: render,
-      update: tick,
-      handleKey: function () { return false; }
+      stop: function () { tick.stop(); },
+      restart: function () { tick.stop(); begin(); print("cmatrix restarted.", "m"); }
     };
   })();
 
@@ -1671,26 +1632,21 @@
         else if (j === lines.length - 1) { l = "\\"; r = "/"; }
         else { l = "|"; r = "|"; }
         var padded = lines[j] + " ".repeat(maxLen - lines[j].length);
-        var msgSpan = '<span style="color:#00f0ff;text-shadow:0 0 6px #00f0ff">' + escHTML(padded) + "</span>";
+        var msgSpan = neonSpan(escHTML(padded), "#00f0ff");
         bubble += l + " " + msgSpan + " " + r + "\n";
       }
       bubble += bottom + "\n";
-      var cow = '<span style="color:#ff2bd6;text-shadow:0 0 6px #ff2bd6">' + escHTML(COW.join("\n")) + "</span>";
-      setScreenHTML(bubble + cow + "\n");
+      setScreen(bubble + neonSpan(escHTML(COW.join("\n")), "#ff2bd6") + "\n");
     }
     return {
-      id: "cowsay", name: "cowsay", description: "A neon cow says your words.", kind: "tool",
+      name: "cowsay", description: "A neon cow says your words.", kind: "tool",
       start: function () {
         message = "Welcome to NEONARC. Type anything and I will say it.";
         render();
         print("cowsay // type any text and press Enter to make the cow speak.", "c");
         print("Controls: type text = say it | restart | quit", "dim");
       },
-      stop: function () {},
       restart: function () { message = "Moo. Ready for a new message."; render(); print("cowsay reset.", "m"); },
-      render: render,
-      update: function () {},
-      handleKey: function () { return false; },
       handleCommand: function (cmd) {
         if (!cmd) return false;
         message = cmd;
@@ -1702,10 +1658,9 @@
 
   /* ---------------- PIPES ---------------- */
   TOOLS.pipes = (function () {
-    var W = 34, H = 20;
+    var W = 34, H = 20, MS = 70;
     var COLORS = ["#00f0ff", "#ff2bd6", "#a45bff", "#3dff9a", "#ffd166", "#ff5470", "#6ea8ff"];
-    var ch, colr, x, y, dir, color, filled, timer;
-    // directions: 0 up, 1 right, 2 down, 3 left
+    var ch, colr, x, y, dir, color, filled, tick = gameTimer();
     var TURN = {
       "0,1": "\u250c", "0,3": "\u2510", "2,1": "\u2514", "2,3": "\u2518",
       "1,0": "\u2518", "1,2": "\u2510", "3,0": "\u2514", "3,2": "\u250c"
@@ -1738,36 +1693,29 @@
       for (var r = 0; r < H; r++) {
         var line = "";
         for (var c = 0; c < W; c++) {
-          if (ch[r][c] === " ") { line += " "; }
-          else {
-            var col = colr[r][c];
-            line += '<span style="color:' + col + ';text-shadow:0 0 6px ' + col + '">' + ch[r][c] + "</span>";
-          }
+          line += ch[r][c] === " " ? " " : neonSpan(ch[r][c], colr[r][c]);
         }
         out += line + "\n";
       }
-      setScreenHTML(out);
+      setScreen(out);
     }
-    function tick() { step(); render(); }
+    function run() { step(); render(); }
+    function begin() { reset(); render(); tick.start(run, MS); }
     return {
-      id: "pipes", name: "pipes", description: "Neon pipes screensaver.", kind: "tool",
+      name: "pipes", description: "Neon pipes screensaver.", kind: "tool",
       start: function () {
-        reset(); render();
+        begin();
         print("pipes // neon conduits snaking across the deck.", "c");
         print("Controls: just watch | restart | quit", "dim");
-        clearInterval(timer); timer = setInterval(tick, 70);
       },
-      stop: function () { clearInterval(timer); timer = null; },
-      restart: function () { this.stop(); reset(); render(); clearInterval(timer); timer = setInterval(tick, 70); },
-      render: render,
-      update: tick,
-      handleKey: function () { return false; }
+      stop: function () { tick.stop(); },
+      restart: function () { tick.stop(); begin(); print("pipes restarted.", "m"); }
     };
   })();
 
   /* ---------------- LOLCAT ---------------- */
   TOOLS.lolcat = (function () {
-    var text, offset, timer;
+    var text, offset, tick = gameTimer(), MS = 110;
     var DEFAULT = ["NEONARC", "rainbow terminal filter", "type any text to colorize it"];
     function render() {
       var lines = Array.isArray(text) ? text : String(text).split("\n");
@@ -1780,28 +1728,25 @@
           if (chr === " ") { out += " "; i++; continue; }
           var hue = (i * 12 + offset) % 360;
           var col = "hsl(" + hue + ",100%,65%)";
-          out += '<span style="color:' + col + ';text-shadow:0 0 6px ' + col + '">' + escHTML(chr) + "</span>";
+          out += neonSpan(escHTML(chr), col);
           i++;
         }
         out += "\n";
         i += 6;
       }
-      setScreenHTML(out);
+      setScreen(out);
     }
-    function tick() { offset = (offset + 12) % 360; render(); }
+    function step() { offset = (offset + 12) % 360; render(); }
+    function begin() { text = DEFAULT; offset = 0; render(); tick.start(step, MS); }
     return {
-      id: "lolcat", name: "lolcat", description: "Rainbow-colored text.", kind: "tool",
+      name: "lolcat", description: "Rainbow-colored text.", kind: "tool",
       start: function () {
-        text = DEFAULT; offset = 0; render();
+        begin();
         print("lolcat // everything is better in rainbow.", "c");
         print("Controls: type text = colorize it | restart | quit", "dim");
-        clearInterval(timer); timer = setInterval(tick, 110);
       },
-      stop: function () { clearInterval(timer); timer = null; },
-      restart: function () { text = DEFAULT; offset = 0; render(); print("lolcat reset.", "m"); },
-      render: render,
-      update: tick,
-      handleKey: function () { return false; },
+      stop: function () { tick.stop(); },
+      restart: function () { tick.stop(); begin(); print("lolcat reset.", "m"); },
       handleCommand: function (cmd) {
         if (!cmd) return false;
         text = [cmd]; render();
@@ -1812,7 +1757,7 @@
 
   /* ---------------- SL (steam locomotive) ---------------- */
   TOOLS.sl = (function () {
-    var W = 46, offset, timer, gone;
+    var W = 46, MS = 90;
     var TRAIN = [
       "      ====        ____",
       "  ___|[]|_______|    |___",
@@ -1821,7 +1766,7 @@
       " |_____________________ ||",
       "   (O)==(O)     (O)==(O) "
     ];
-    var TW = 0;
+    var TW = 0, offset, gone, tick = gameTimer();
     for (var t = 0; t < TRAIN.length; t++) TW = Math.max(TW, TRAIN[t].length);
     function render() {
       var out = "";
@@ -1832,34 +1777,30 @@
           var col = offset + i;
           if (col >= 0 && col < W) buf[col] = line[i];
         }
-        out += '<span style="color:#ffd166;text-shadow:0 0 6px #ffd166">' + escHTML(buf.join("")) + "</span>\n";
+        out += neonSpan(escHTML(buf.join("")), "#ffd166") + "\n";
       }
       out += "\n";
       if (gone) {
         var msg = ["The train has departed.", "Type restart to run it again."];
         for (var m = 0; m < msg.length; m++) out += center(msg[m], W) + "\n";
       }
-      setScreenHTML(out);
+      setScreen(out);
     }
-    function tick() {
+    function step() {
       offset -= 1;
-      if (offset < -TW) { gone = true; clearInterval(timer); timer = null; }
+      if (offset < -TW) { gone = true; tick.stop(); }
       render();
     }
-    function reset() { offset = W; gone = false; }
+    function begin() { offset = W; gone = false; render(); tick.start(step, MS); }
     return {
-      id: "sl", name: "sl", description: "A steam locomotive rolls by.", kind: "tool",
+      name: "sl", description: "A steam locomotive rolls by.", kind: "tool",
       start: function () {
-        reset(); render();
+        begin();
         print("sl // steam locomotive incoming. All aboard!", "c");
         print("Controls: watch it roll | restart | quit", "dim");
-        clearInterval(timer); timer = setInterval(tick, 90);
       },
-      stop: function () { clearInterval(timer); timer = null; },
-      restart: function () { this.stop(); reset(); render(); clearInterval(timer); timer = setInterval(tick, 90); },
-      render: render,
-      update: tick,
-      handleKey: function () { return false; }
+      stop: function () { tick.stop(); },
+      restart: function () { tick.stop(); begin(); print("sl restarted.", "m"); }
     };
   })();
 
@@ -1882,7 +1823,6 @@
         i++;
         setTimeout(next, 420);
       } else {
-        shell.booted = true;
         showMenu();
         focusInput();
       }

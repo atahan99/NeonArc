@@ -1,6 +1,6 @@
 # NEONARC
 
-> A compact cyberpunk neon **terminal arcade** — seven classic mini-games and a handful of retro Linux terminal toys, all inside a single self-contained `index.html`. No build tools, no dependencies, no CDNs. Just open the file.
+> A compact cyberpunk neon **terminal arcade** — eight classic mini-games and a handful of retro Linux terminal toys, all inside a single self-contained `index.html`. No build tools, no dependencies, no CDNs. Just open the file.
 
 ### [Play online →](https://atahan99.github.io/NeonArc/)
 
@@ -100,21 +100,25 @@ Controls are shown when each game starts. In general:
 
 ## Architecture
 
-A small **shell** handles the boot sequence, terminal output, command parsing, mode switching, the status bar, keyboard routing, and the draggable splitter. It is completely separate from the games.
+A small **shell** handles the boot sequence, terminal output, command parsing, mode switching, the status bar, keyboard routing, and the draggable splitter. Shared helpers (`neonSpan`, `moveCursor`, `gameTimer`, `endScoreGame`, etc.) keep the game modules lean without changing behavior.
 
 Each game/tool is a self-contained object in a registry with a common interface:
 
 ```js
 {
-  id, name, description,
-  start(), stop(), restart(),
-  render(), update(),
-  handleKey(event),   // realtime / cursor input
-  handleCommand(text) // text commands (Hanoi moves, Hangman guesses, cowsay/lolcat text)
+  name, description,
+  kind,              // optional; "tool" for Linux toys
+  start(), stop(),   // stop only when a timer needs clearing
+  restart(),
+  handleKey(event),  // optional; realtime / cursor input
+  handleCommand(text), // optional; text commands (Hanoi moves, Hangman guesses, cowsay/lolcat text)
+  statusText()       // optional; live status bar info
 }
 ```
 
-Real-time games (Snake, Tetris) and animated tools (cmatrix, pipes, lolcat, sl) use `setInterval` cleared on `stop()`. Grids are drawn as monospace text with colored `<span>`s.
+Game and tool IDs come from the `MENU_ORDER` / `TOOL_ORDER` registry keys. Name aliases (e.g. `mines`, `matrix`, `train`) are mapped automatically at boot.
+
+Real-time games (Snake, Tetris) and animated tools (cmatrix, pipes, lolcat, sl) use `gameTimer()` — a thin `setInterval` wrapper cleared on `stop()`. The status bar updates on input and on each game tick (no background polling). Grids are drawn as monospace text with colored `<span>`s via `neonSpan()`.
 
 Best scores are stored under keys like:
 
