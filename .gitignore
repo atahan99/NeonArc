@@ -10,3 +10,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local Cloudflare deploy config
+wrangler.jsonc
+.assetsignore
+.wrangler/

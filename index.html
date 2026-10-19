@@ -3,7 +3,20 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>NEONARC</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<title>NeonArc · terminal arcade in the browser</title>
+<meta name="description" content="Eight classic games and five retro Unix toys, played from a command prompt in your browser. One HTML file, no dependencies." />
+<meta name="theme-color" content="#07030f" />
+<link rel="canonical" href="https://neonarc.cybrsmr.xyz/" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://neonarc.cybrsmr.xyz/" />
+<meta property="og:title" content="NeonArc" />
+<meta property="og:description" content="Eight classic games and five retro Unix toys, played from a command prompt in your browser." />
+<meta property="og:image" content="https://neonarc.cybrsmr.xyz/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="The NeonArc main menu: a terminal listing Snake, Tetris, Sudoku and other games." />
+<meta name="twitter:card" content="summary_large_image" />
 <style>
   /* ============================================================
      NEONARC - cyberpunk neon terminal arcade
@@ -258,6 +271,11 @@
     border-radius: 8px;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    #app, .cursor { animation: none; }
+    header.topbar .ghlink, .splitter { transition: none; }
+  }
+
   @media (max-width: 720px) {
     main { flex-direction: column; }
     #viewport { width: 100%; max-width: 100%; }
@@ -340,7 +358,7 @@
     return " ".repeat(left) + s + " ".repeat(total - left);
   }
   function load(key, def) {
-    try { var v = localStorage.getItem(key); return v === null ? def : Number(v); }
+    try { var v = localStorage.getItem(key), n = Number(v); return v === null || !isFinite(n) ? def : n; }
     catch (e) { return def; }
   }
   function save(key, val) { try { localStorage.setItem(key, String(val)); } catch (e) {} }
@@ -503,24 +521,6 @@
     "Best scores are saved locally on this machine."
   ].join("\n");
 
-  function listGames() {
-    print("Games:", "c");
-    for (var i = 0; i < MENU_ORDER.length; i++) {
-      var g = GAMES[MENU_ORDER[i]];
-      print("  " + padLabel(i + 1) + " " + g.name + " - " + g.description, "g");
-    }
-    print("");
-    listTools();
-  }
-
-  function listTools() {
-    print("Linux tools:", "m");
-    for (var j = 0; j < TOOL_ORDER.length; j++) {
-      var t = TOOLS[TOOL_ORDER[j]];
-      print("  " + padLabel(MENU_ORDER.length + j + 1) + " " + t.name + " - " + t.description, "p");
-    }
-  }
-
   function submitCommand(raw) {
     var original = raw;
     var cmd = raw.trim();
@@ -579,7 +579,8 @@
   inputEl.addEventListener("keydown", function (e) {
     var g = shell.activeGame;
 
-    if (shell.mode === "game" && g && g.handleKey) {
+    // leave browser/OS shortcuts (Cmd+A, Ctrl+R, ...) alone
+    if (shell.mode === "game" && g && g.handleKey && !(e.metaKey || e.ctrlKey || e.altKey)) {
       // arrows always route to the game (and never scroll)
       if (ARROWS[e.key]) {
         e.preventDefault();
@@ -1091,7 +1092,7 @@
       },
       restart: function (arg) {
         var n = parseInt(arg, 10);
-        if (isNaN(n)) n = 3;
+        if (isNaN(n)) n = disks;
         n = Math.max(3, Math.min(7, n));
         reset(n); render();
         print("Tower of Hanoi restarted with " + n + " disks.", "m");
@@ -1239,12 +1240,14 @@
   GAMES["2048"] = (function () {
     var BEST_KEY = "neonarc.2048.best";
     var N = 4;
-    var grid, score, best, over, won;
+    // best = record at round start (so endScoreGame can detect a new best); shown via shownBest()
+    var grid, score, best, over, won, announced;
 
+    function shownBest() { return Math.max(score, best); }
     function reset() {
       grid = [];
       for (var i = 0; i < N * N; i++) grid.push(0);
-      score = 0; over = false; won = false;
+      score = 0; over = false; won = false; announced = false;
       best = load(BEST_KEY, 0);
       addTile(); addTile();
     }
@@ -1302,9 +1305,9 @@
       }
       if (moved) {
         addTile();
-        if (score > best) { best = score; save(BEST_KEY, best); }
+        if (score > best) save(BEST_KEY, score); // persist mid-round in case the tab closes
         render();
-        if (won) { print("2048 tile reached! You can keep going.", "y"); won = false; }
+        if (won && !announced) { print("2048 tile reached! You can keep going.", "y"); announced = true; }
         if (!canMove()) endGame();
       }
     }
@@ -1347,7 +1350,7 @@
         }
         out += line + "\n" + sep + "\n";
       }
-      out += "\nScore: " + score + "   Best: " + best + "\n";
+      out += "\nScore: " + score + "   Best: " + shownBest() + "\n";
       if (over) out += "\n  >> GAME OVER <<\n";
       setScreen(out);
     }
@@ -1367,7 +1370,7 @@
         if (e.key === "ArrowDown" || k === "s") { move("down"); updateStatus(); return true; }
         return false;
       },
-      statusText: function () { return "SCORE: " + score + " | BEST: " + best; }
+      statusText: function () { return "SCORE: " + score + " | BEST: " + shownBest(); }
     };
   })();
 
@@ -1737,7 +1740,11 @@
       setScreen(out);
     }
     function step() { offset = (offset + 12) % 360; render(); }
-    function begin() { text = DEFAULT; offset = 0; render(); tick.start(step, MS); }
+    // reduced motion: keep the rainbow, drop the colour cycling
+    function begin() {
+      text = DEFAULT; offset = 0; render();
+      if (!matchMedia("(prefers-reduced-motion: reduce)").matches) tick.start(step, MS);
+    }
     return {
       name: "lolcat", description: "Rainbow-colored text.", kind: "tool",
       start: function () {

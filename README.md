@@ -1,136 +1,128 @@
-# NEONARC
+# NeonArc
 
-> A compact cyberpunk neon **terminal arcade** — eight classic mini-games and a handful of retro Linux terminal toys, all inside a single self-contained `index.html`. No build tools, no dependencies, no CDNs. Just open the file.
+A terminal-style arcade that runs in the browser. Eight small games and five
+retro Unix toys (`cmatrix`, `cowsay`, `pipes`, `lolcat`, `sl`), driven by a
+command prompt. Everything lives in one HTML file with no framework, no build
+step and no runtime dependencies.
 
-### [Play online →](https://neonarc.cybrsmr.xyz)
+**[Play it at neonarc.cybrsmr.xyz](https://neonarc.cybrsmr.xyz)**
 
-![NEONARC menu](screenshots/neonarc-menu.png)
+![NeonArc main menu](screenshots/neonarc-menu.png)
 
-## Overview
+## Why it exists
 
-NeonArc boots into a neon cyberdeck terminal. You get a short boot sequence, then a menu where you pick a game or tool by typing a **number**, a **name**, or a **command**. Everything renders as glowing DOM text with scanlines, a CRT flicker, and a blinking cursor — no `<canvas>`, no images, no external fonts.
+I wanted to see how far plain DOM text could go as a game renderer. There is no
+`<canvas>`, no images and no web fonts: every board is monospace text inside a
+`<pre>`, colored with `<span>`s. The single-file rule was a deliberate
+constraint. You can save `index.html`, open it from disk and it works.
 
-The whole project is one HTML file you can open directly in any modern browser.
+## What's inside
 
-## Features
+| # | Name | Type | Notes |
+|---|------|------|-------|
+| 1 | Snake | real-time | 24x15 board, best score saved |
+| 2 | Tetris | real-time | rotation with simple wall kicks, levels speed up every 10 lines |
+| 3 | Sudoku | puzzle | one fixed puzzle, live duplicate highlighting |
+| 4 | Tower of Hanoi | puzzle | 3 to 7 disks (`restart 5`), moves typed as `1 3` |
+| 5 | Minesweeper | puzzle | 8x8, 10 mines, flood fill, first reveal is never a mine |
+| 6 | 2048 | puzzle | best score saved |
+| 7 | Hangman | word | 20-word list, 6 misses |
+| 8 | Tic-Tac-Toe | two-player | hot-seat, running score across rounds |
+| 9 | cmatrix | toy | falling code rain |
+| 10 | cowsay | toy | type a line and the cow says it |
+| 11 | pipes | toy | the pipes screensaver |
+| 12 | lolcat | toy | animated rainbow text |
+| 13 | sl | toy | a steam locomotive crosses the screen |
 
-- **Single file** — all HTML, CSS, and JavaScript embedded in one `index.html`.
-- **Zero dependencies** — no frameworks, libraries, CDNs, build step, or package manager.
-- **Cyberpunk terminal UI** — neon cyan / magenta / purple / green palette, glow, scanline overlay, CRT flicker, blinking cursor.
-- **Command shell** — type numbers, names, or commands (`help`, `list`, `tools`, `play <name>`, `restart`, `quit`, ...).
-- **Color-coded rendering** — each game colors its pieces distinctly (Tetris blocks, 2048 tiles, Snake, Sudoku digits, Hanoi disks, Minesweeper numbers).
-- **Resizable layout** — drag the neon splitter to rebalance the terminal and the game viewport.
-- **Persistent best scores** via `localStorage` (Snake, Tetris, 2048).
-- **Responsive** — stacks vertically on narrow screens.
+## Using it
 
-## Games
+Type a number, a name or a command at the `>` prompt.
 
-| # | Game | Description |
-|---|------|-------------|
-| 1 | Snake | Classic neon snake with food, growth, and a saved best score. |
-| 2 | Tetris | Falling tetrominoes with rotation, line clears, levels, and best score. |
-| 3 | Sudoku | A built-in 9x9 puzzle with fixed clues, duplicate highlighting, and win detection. |
-| 4 | Tower of Hanoi | Move the stack to tower 3; supports `restart 3`–`restart 7` disk counts. |
-| 5 | Minesweeper | 8x8 grid, 10 mines, flags, flood-fill reveal, first-click safety. |
-| 6 | 2048 | Merge tiles to reach 2048, with score and best score. |
-| 7 | Hangman | Guess the hidden word one letter at a time. |
-| 8 | Tic-Tac-Toe | Two-player hot-seat X vs O with a running scoreboard. |
+```
+help            list commands
+list            games and tools with descriptions
+tools           tools only
+play <name>     launch by name, e.g. play tetris
+restart [n]     restart the current game (Hanoi takes a disk count)
+quit, menu      back to the menu
+clear           clear the terminal log
+about           about NeonArc
+```
 
-## Linux tools
+Names have aliases: `mines`, `ttt`, `matrix`, `cow`, `train` and a few more.
 
-Retro terminal toys, in their own menu category:
+Controls are printed when each game starts:
 
-| # | Tool | Description |
-|---|------|-------------|
-| 9 | cmatrix | Falling neon "code rain". |
-| 10 | cowsay | A neon ASCII cow that says whatever you type. |
-| 11 | pipes | The classic pipes screensaver in neon. |
-| 12 | lolcat | Animated rainbow text. |
-| 13 | sl | A steam locomotive rolls across the screen. |
+- **Snake, Tetris, 2048:** arrow keys or WASD. In Tetris, Up/W/Space rotates and Down/S soft-drops.
+- **Sudoku, Minesweeper, Tic-Tac-Toe:** arrows or WASD move the cursor. Digits fill Sudoku cells or place a Tic-Tac-Toe mark; Enter/Space reveals and F flags in Minesweeper.
+- **Hanoi:** type `from to`, e.g. `1 3`.
+- **Hangman, cowsay, lolcat:** type text and press Enter.
 
-## Getting started
+Single-key game controls are only captured while the prompt is empty, so you
+can still type commands mid-game.
 
-No install. No server required.
+## Run it locally
 
 ```bash
 git clone https://github.com/atahan99/NeonArc.git
 cd NeonArc
-open index.html      # macOS
-# or: xdg-open index.html   (Linux)
-# or just double-click index.html
+open index.html
 ```
 
-## Commands
+On Linux use `xdg-open index.html`, or double-click the file. No server is needed.
 
-Type these in the prompt at any time:
+## How it works
 
-```
-help              show available commands
-list              show all games and tools
-tools             show just the Linux tools
-menu              return to the main menu
-clear             clear the terminal output
-about             about NEONARC
-quit              exit the current game/tool, back to the menu
-restart           restart the current game/tool (e.g. restart 5 for Hanoi)
-play <name>       launch by name (e.g. play snake, play cmatrix)
-```
-
-You can also just type a **number** (`1`–`13`) or a **name** (`snake`, `tetris`, `2048`, `mines`, `matrix`, `cow`, `train`, ...).
-
-## Controls
-
-Controls are shown when each game starts. In general:
-
-- **Snake / Tetris / 2048** — Arrow keys or WASD.
-- **Sudoku / Minesweeper / Tic-Tac-Toe** — Arrows/WASD to move the cursor; numbers/Enter/Space to act.
-- **Tower of Hanoi** — type a move like `1 3` (move top disk from tower 1 to tower 3).
-- **Hangman / cowsay / lolcat** — type text (a letter to guess, or a phrase) and press Enter.
-- **restart** / **quit** work in every game.
-
-## Screenshots
-
-| 2048 | Tetris |
-|------|--------|
-| ![2048](screenshots/neonarc-2048.png) | ![Tetris](screenshots/neonarc-tetris.png) |
-
-| Tic-Tac-Toe | cmatrix |
-|-------------|---------|
-| ![Tic-Tac-Toe](screenshots/neonarc-tictactoe.png) | ![cmatrix](screenshots/neonarc-cmatrix.png) |
-
-## Architecture
-
-A small **shell** handles the boot sequence, terminal output, command parsing, mode switching, the status bar, keyboard routing, and the draggable splitter. Shared helpers (`neonSpan`, `moveCursor`, `gameTimer`, `endScoreGame`, etc.) keep the game modules lean without changing behavior.
-
-Each game/tool is a self-contained object in a registry with a common interface:
+The script is a small shell plus two registries, `GAMES` and `TOOLS`. The shell
+owns the boot sequence, the terminal log, command parsing, keyboard routing,
+the status bar and the draggable splitter. Each game is a self-contained object
+with the same shape:
 
 ```js
 {
   name, description,
-  kind,              // optional; "tool" for Linux toys
-  start(), stop(),   // stop only when a timer needs clearing
-  restart(),
-  handleKey(event),  // optional; realtime / cursor input
-  handleCommand(text), // optional; text commands (Hanoi moves, Hangman guesses, cowsay/lolcat text)
-  statusText()       // optional; live status bar info
+  kind,                 // "tool" for the Unix toys
+  start(), restart(arg),
+  stop(),               // only when a timer must be cleared
+  handleKey(event),     // optional: real-time or cursor input
+  handleCommand(text),  // optional: typed input (Hanoi moves, Hangman letters)
+  statusText()          // optional: live status bar text
 }
 ```
 
-Game and tool IDs come from the `MENU_ORDER` / `TOOL_ORDER` registry keys. Name aliases (e.g. `mines`, `matrix`, `train`) are mapped automatically at boot.
+Menu numbers come from the order of `MENU_ORDER` and `TOOL_ORDER`, so adding a
+game means writing one object and adding its key to a list.
 
-Real-time games (Snake, Tetris) and animated tools (cmatrix, pipes, lolcat, sl) use `gameTimer()` — a thin `setInterval` wrapper cleared on `stop()`. The status bar updates on input and on each game tick (no background polling). Grids are drawn as monospace text with colored `<span>`s via `neonSpan()`.
+Rendering is string building: each frame produces the full board as text,
+wraps colored cells in `<span>`s and writes it to the `<pre>` in one
+assignment. Real-time games and animated toys share a small `setInterval`
+wrapper (`gameTimer()`) that is cleared on `stop()`, so leaving a game never
+leaves a timer running.
 
-Best scores are stored under keys like:
+Best scores for Snake, Tetris and 2048 are kept in `localStorage` under
+`neonarc.<game>.best`. Nothing else is stored.
 
-```
-neonarc.snake.best
-neonarc.tetris.best
-neonarc.2048.best
-```
+### Security notes
 
-## Browser support
+- Log output uses `textContent`. The only user text that reaches `innerHTML`
+  (cowsay, lolcat, Hangman) is HTML-escaped first.
+- The hosted site sends a Content-Security-Policy, `X-Frame-Options: DENY`,
+  `nosniff`, a strict referrer policy and a Permissions-Policy that turns off
+  sensors, camera, microphone and payments. See [`_headers`](_headers).
+- The deploy uses an allowlist, so only `index.html`, `_headers` and the
+  favicon are published. The repo, README and screenshots are not served.
 
-Any modern evergreen browser (Chrome, Edge, Firefox, Safari). Uses only standard DOM APIs, CSS, and `localStorage`.
+## Hosting and privacy
+
+The live site is served as static assets on Cloudflare. The hosted copy loads
+Cloudflare Web Analytics, which is cookieless and counts page views. The copy
+you open from disk loads nothing from the network.
+
+## Known limitations
+
+- Keyboard only. There are no touch controls yet, so the games are not playable on a phone.
+- The game boards are not exposed to screen readers. With `prefers-reduced-motion` on, the CRT flicker, cursor blink and lolcat colour cycling stop, but the animated toys you launch still move.
+- Sudoku has a single built-in puzzle.
 
 ## License
 
