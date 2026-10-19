@@ -178,10 +178,10 @@ Each phase is shippable on its own. Rough effort is for one person.
 - [x] README rewrite (done in this pass)
 
 ### Phase 1: make it playable by anyone (2-3 days)
-- [ ] Touch: swipe for Snake, 2048 and Tetris; tap cells for Sudoku, Minesweeper and Tic-Tac-Toe; on-screen buttons for rotate and drop
-- [ ] Game-first layout: board scales to fit, log becomes a side or bottom strip
-- [ ] Clickable menu, Up-arrow history, Tab completion, any key skips boot
-- [ ] Fix bugs 2 and 3 with one rule: while a game is running, a line that matches a launch name or number goes to the shell, not the game
+- [x] Touch: swipe for Snake, 2048 and Tetris; tap cells for Sudoku, Minesweeper and Tic-Tac-Toe; on-screen buttons for rotate and drop
+- [x] Game-first layout: board scales to fit, log becomes a side or bottom strip
+- [x] Clickable menu, Up-arrow history, Tab completion, any key skips boot
+- [x] Fix bugs 2 and 3 with one rule: while a game is running, a line that matches a launch name or number goes to the shell, not the game
 
 ### Phase 2: own the look (2 days)
 - [ ] Choose one direction (phosphor terminal, or full arcade cabinet) and write it down in a DESIGN.md

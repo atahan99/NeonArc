@@ -169,9 +169,10 @@
 
   /* Game viewport */
   #viewport {
-    width: 50%;
+    flex: 1;
     min-width: 0;
     display: none;
+    touch-action: none; /* swipes and taps go to the game, not page scroll/zoom */
     border: 1px solid var(--purple);
     border-radius: 8px;
     padding: 10px 12px;
@@ -179,7 +180,8 @@
     box-shadow: 0 0 14px rgba(164,91,255,0.25), inset 0 0 22px rgba(0,0,0,0.5);
     overflow: auto;
   }
-  #viewport.active {
+  #app.game #terminal { flex: 0 0 clamp(220px, 28%, 380px); }
+  #app.game #viewport {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -196,7 +198,7 @@
     box-shadow: 0 0 8px rgba(0,240,255,0.3);
     transition: background 0.15s ease, box-shadow 0.15s ease;
   }
-  .splitter.active { display: block; }
+  #app.game .splitter { display: block; }
   .splitter:hover,
   .splitter.dragging {
     background: linear-gradient(180deg, rgba(0,240,255,0.7), rgba(255,43,214,0.7));
@@ -208,10 +210,31 @@
     font-family: inherit;
     color: var(--green);
     text-shadow: 0 0 8px rgba(61,255,154,0.5);
-    font-size: clamp(11px, 1.6vw, 16px);
+    font-size: 16px; /* fitScreen() sizes it to the board */
     line-height: 1.2;
   }
   #screen .hi { color: var(--cyan); text-shadow: 0 0 8px var(--cyan); }
+
+  /* Clickable menu entries */
+  .link { cursor: pointer; }
+  .link:hover, .link:focus { text-decoration: underline; outline: none; }
+
+  /* Touch controls (shown on small or touch screens while a game runs) */
+  #touch { display: none; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  #touch button {
+    flex: 1 0 auto;
+    min-width: max(44px, 17%); /* digit pads wrap five to a row */
+    min-height: 44px;
+    padding: 6px 4px;
+    font: inherit;
+    color: var(--cyan);
+    background: rgba(0,240,255,0.06);
+    border: 1px solid rgba(0,240,255,0.5);
+    border-radius: 6px;
+    touch-action: manipulation;
+  }
+  #touch button:active { background: rgba(0,240,255,0.2); }
+  #touch .logbtn { display: none; }
 
   /* Input row */
   .inputrow {
@@ -276,11 +299,20 @@
     header.topbar .ghlink, .splitter { transition: none; }
   }
 
+  @media (max-width: 720px), (pointer: coarse) {
+    #app.game #touch { display: flex; }
+  }
+
   @media (max-width: 720px) {
-    main { flex-direction: column; }
-    #viewport { width: 100%; max-width: 100%; }
+    #app { padding: 10px; gap: 8px; }
+    main { flex-direction: column; gap: 8px; }
     .splitter { display: none !important; }
     header.topbar .tag { display: none; }
+    /* board first, a 2-line log under it (tap "log" to expand), then the touch controls */
+    #app.game #viewport { order: 1; padding: 6px; }
+    #app.game #terminal { order: 2; flex: 0 0 auto !important; max-height: calc(2.7em + 18px); padding: 8px 10px; }
+    #app.game.logopen #terminal { max-height: 45%; }
+    #touch .logbtn { display: block; }
   }
 </style>
 </head>
@@ -304,6 +336,8 @@
       <div id="splitter" class="splitter" title="Drag to resize"></div>
       <div id="viewport"><pre id="screen"></pre></div>
     </main>
+
+    <div id="touch"></div>
 
     <div class="inputrow">
       <span class="prompt">&gt;</span>
@@ -333,6 +367,8 @@
   var statusEl = document.getElementById("status");
   var splitterEl = document.getElementById("splitter");
   var mainEl = document.querySelector("main");
+  var appEl = document.getElementById("app");
+  var touchEl = document.getElementById("touch");
 
   // ---------- helpers ----------
   function print(text, cls) {
@@ -344,9 +380,35 @@
       terminalEl.appendChild(div);
     }
     terminalEl.scrollTop = terminalEl.scrollHeight;
+    return div;
   }
   function clearTerminal() { terminalEl.innerHTML = ""; }
-  function setScreen(html) { screenEl.innerHTML = html; }
+  function setScreen(html) { screenEl.innerHTML = html; fitScreen(); }
+
+  // Size the board font so the text grid fills the viewport. Rows/cols only grow during a
+  // round (cleared on launch), so the board doesn't jump when e.g. a GAME OVER line appears.
+  var CHAR_W = 0, LINE_H = 1.2, fitCols = 0, fitRows = 0;
+  function fitScreen() {
+    if (!appEl.classList.contains("game")) return;
+    if (!CHAR_W) {
+      var probe = document.createElement("span");
+      probe.style.fontSize = "100px";
+      probe.textContent = "0000000000";
+      screenEl.appendChild(probe);
+      CHAR_W = probe.getBoundingClientRect().width / 1000 || 0.6;
+      screenEl.removeChild(probe);
+    }
+    var lines = screenEl.textContent.replace(/\n$/, "").split("\n");
+    fitRows = Math.max(fitRows, lines.length);
+    for (var i = 0; i < lines.length; i++) fitCols = Math.max(fitCols, lines[i].length);
+    var cs = getComputedStyle(viewportEl);
+    var w = viewportEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var h = viewportEl.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    var px = Math.floor(Math.min(w / (fitCols * CHAR_W), h / (fitRows * LINE_H)) * 10) / 10;
+    px = Math.max(8, Math.min(48, px)) + "px";
+    if (screenEl.style.fontSize !== px) screenEl.style.fontSize = px;
+  }
+  window.addEventListener("resize", fitScreen);
   function escHTML(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
@@ -420,7 +482,7 @@
       for (i = 0; i < MENU_ORDER.length; i++) {
         g = GAMES[MENU_ORDER[i]];
         line = padLabel(i + 1) + " " + g.name;
-        print((mode === "menu" ? line : "  " + line + " - " + g.description), "g");
+        makeLink(print((mode === "menu" ? line : "  " + line + " - " + g.description), "g"), MENU_ORDER[i]);
       }
       print("");
     }
@@ -430,14 +492,23 @@
       for (j = 0; j < TOOL_ORDER.length; j++) {
         t = TOOLS[TOOL_ORDER[j]];
         line = padLabel(MENU_ORDER.length + j + 1) + " " + t.name;
-        print((mode === "menu" ? line : "  " + line + " - " + t.description), "p");
+        makeLink(print((mode === "menu" ? line : "  " + line + " - " + t.description), "p"), TOOL_ORDER[j]);
       }
     }
     if (mode === "menu") {
       print("");
-      print("Type a number, a name, or help.", "dim");
+      print("Type a number or a name (or click one), or help.", "dim");
       print("");
     }
+  }
+  function makeLink(el, id) {
+    el.classList.add("link");
+    el.setAttribute("role", "button");
+    el.tabIndex = 0;
+    el.addEventListener("click", function () { submitCommand(id); });
+    el.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); submitCommand(id); }
+    });
   }
   function showMenu() { printCatalog("menu"); }
   function listGames() { printCatalog("list"); }
@@ -466,14 +537,15 @@
     }
     shell.mode = "game";
     shell.activeGame = g;
-    viewportEl.classList.add("active");
-    splitterEl.classList.add("active");
-    // reset to the default equal (50/50) split on each launch
-    viewportEl.style.width = "";
-    viewportEl.style.maxWidth = "";
+    appEl.classList.add("game");
+    appEl.classList.remove("logopen");
+    terminalEl.style.flexBasis = ""; // back to the default log width on each launch
+    fitCols = fitRows = 0;
+    buildTouchControls(g);
     clearTerminal();
     print("Launching " + g.name + "...", "c");
     g.start();
+    fitScreen(); // again now that the log lines exist (they shrink the board area on mobile)
     updateStatus();
     focusInput();
   }
@@ -486,8 +558,7 @@
     if (shell.activeGame.stop) shell.activeGame.stop();
     shell.activeGame = null;
     shell.mode = "menu";
-    viewportEl.classList.remove("active");
-    splitterEl.classList.remove("active");
+    appEl.classList.remove("game");
     setScreen("");
     clearTerminal();
     showMenu();
@@ -559,13 +630,13 @@
         return;
     }
 
+    // ----- launch by number / name (wins over game text, so "snake" in cowsay launches) -----
+    if (NAME_TO_ID[lower]) { launchGame(NAME_TO_ID[lower]); return; }
+
     // ----- in-game custom command (hanoi moves, hangman guesses, cowsay/lolcat text) -----
     if (shell.mode === "game" && shell.activeGame && shell.activeGame.handleCommand) {
       if (shell.activeGame.handleCommand(cmd) === true) { updateStatus(); return; }
     }
-
-    // ----- launch by number / name -----
-    if (NAME_TO_ID[lower]) { launchGame(NAME_TO_ID[lower]); return; }
 
     // ----- unknown -----
     print("Unknown command. Type help for available commands.", "r");
@@ -573,46 +644,114 @@
 
   // ---------- keyboard ----------
   var ARROWS = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1 };
+  var GLOBALS = ["help", "about", "clear", "list", "tools", "menu", "quit", "exit", "restart", "play"];
+  var SHELL_WORDS = GLOBALS.concat(Object.keys(NAME_TO_ID));
+  var NAMES = MENU_ORDER.concat(TOOL_ORDER);
 
-  function focusInput() { inputEl.focus(); }
+  // A line the shell owns even while a game runs: a global command, or a launch name/number.
+  function isShellLine(s) {
+    s = s.trim().toLowerCase();
+    return GLOBALS.indexOf(s.split(/\s+/)[0]) !== -1 || !!NAME_TO_ID[s];
+  }
+  function isShellPrefix(s) {
+    s = s.toLowerCase();
+    return SHELL_WORDS.some(function (w) { return w.indexOf(s) === 0; });
+  }
+
+  // Touch users get no auto-focus (it would pop the on-screen keyboard over the board),
+  // except in games that are played by typing.
+  var touchMode = matchMedia("(pointer: coarse)").matches;
+  document.addEventListener("pointerdown", function (e) { touchMode = e.pointerType === "touch"; }, true);
+  function focusInput() {
+    if (touchMode && !(shell.activeGame && shell.activeGame.handleCommand)) return;
+    inputEl.focus();
+  }
+
+  // A game key that could also start a command ("s" in Snake, "2" in Sudoku) goes to the game
+  // AND stays in the prompt for a moment; if the next key continues a command, typing wins.
+  // shortcut: plain timeout to tell the two apart; two fast Tic-Tac-Toe moves "1" "2" read as "12".
+  var pending = false, pendingTimer = null, PENDING_MS = 700;
+  function clearPending() {
+    clearTimeout(pendingTimer);
+    if (pending) { pending = false; inputEl.value = ""; }
+  }
+
+  var history = [], histPos = 0;
+  function complete() {
+    var m = inputEl.value.match(/^(\s*(?:play\s+)?)(\S*)$/i);
+    if (!m) return;
+    var word = m[2].toLowerCase();
+    var hits = (m[1] ? NAMES : GLOBALS.concat(NAMES)).filter(function (w) { return w.indexOf(word) === 0; });
+    if (!hits.length) return;
+    var common = hits.reduce(function (a, b) {
+      var i = 0;
+      while (i < a.length && a[i] === b[i]) i++;
+      return a.slice(0, i);
+    });
+    if (hits.length > 1 && common === word) print(hits.join("  "), "dim");
+    inputEl.value = m[1] + common + (hits.length === 1 ? " " : "");
+  }
 
   inputEl.addEventListener("keydown", function (e) {
     var g = shell.activeGame;
+    var mod = e.metaKey || e.ctrlKey || e.altKey; // leave browser/OS shortcuts (Cmd+A, Ctrl+R, ...) alone
+    var playing = shell.mode === "game" && g && g.handleKey && !mod;
 
-    // leave browser/OS shortcuts (Cmd+A, Ctrl+R, ...) alone
-    if (shell.mode === "game" && g && g.handleKey && !(e.metaKey || e.ctrlKey || e.altKey)) {
-      // arrows always route to the game (and never scroll)
-      if (ARROWS[e.key]) {
-        e.preventDefault();
-        g.handleKey(e);
-        updateStatus();
-        return;
-      }
+    if (playing && (inputEl.value === "" || pending) && e.key !== "Shift" && e.key !== "CapsLock") {
       if (e.key === "Enter") {
-        // empty line + Enter -> let game use it (minesweeper reveal), else submit
-        if (inputEl.value.trim() === "") {
-          if (g.handleKey(e) === true) { e.preventDefault(); updateStatus(); return; }
+        if (!(pending && isShellLine(inputEl.value))) {
+          clearPending();
           e.preventDefault();
+          if (g.handleKey(e) === true) updateStatus(); // empty Enter: minesweeper reveal, tetris drop
           return;
         }
-        // fall through to submit non-empty command
-      } else if (inputEl.value === "") {
-        // single-key controls only when not composing a command
-        if (g.handleKey(e) === true) { e.preventDefault(); updateStatus(); return; }
+        // a pending key that is a whole command ("5") submits below
+      } else if (pending && e.key.length === 1 && isShellPrefix(inputEl.value + e.key)) {
+        clearTimeout(pendingTimer);
+        pending = false; // now composing a command: let the key type
+        return;
+      } else {
+        clearPending();
+        if (g.handleKey(e) === true) {
+          if (e.key.length === 1 && isShellPrefix(e.key)) {
+            pending = true;
+            pendingTimer = setTimeout(clearPending, PENDING_MS);
+          } else {
+            e.preventDefault();
+          }
+          updateStatus();
+          return;
+        }
       }
     }
 
+    if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !mod) {
+      if (!history.length) return;
+      e.preventDefault();
+      histPos = Math.max(0, Math.min(history.length, histPos + (e.key === "ArrowUp" ? -1 : 1)));
+      inputEl.value = history[histPos] || "";
+      return;
+    }
+    if (e.key === "Tab" && inputEl.value.trim() && !mod) {
+      e.preventDefault();
+      complete();
+      return;
+    }
     if (e.key === "Enter") {
       e.preventDefault();
+      clearTimeout(pendingTimer);
+      pending = false;
       var val = inputEl.value;
       inputEl.value = "";
+      if (val.trim() && val !== history[history.length - 1]) history.push(val);
+      histPos = history.length;
       submitCommand(val);
     }
   });
 
   // keep the terminal focused for keyboard play
   document.addEventListener("mousedown", function (e) {
-    if (e.target !== inputEl && e.target !== splitterEl) {
+    if (!touchMode && e.target !== inputEl && e.target !== splitterEl) {
       setTimeout(focusInput, 0);
     }
   });
@@ -623,7 +762,7 @@
     var dragging = false;
     var MIN = 220; // min px width for each panel
     splitterEl.addEventListener("pointerdown", function (e) {
-      if (!splitterEl.classList.contains("active")) return;
+      if (!appEl.classList.contains("game")) return;
       dragging = true;
       splitterEl.classList.add("dragging");
       try { splitterEl.setPointerCapture(e.pointerId); } catch (_) {}
@@ -632,11 +771,9 @@
     splitterEl.addEventListener("pointermove", function (e) {
       if (!dragging) return;
       var rect = mainEl.getBoundingClientRect();
-      var vw = rect.right - e.clientX;
-      var max = rect.width - MIN;
-      vw = Math.max(MIN, Math.min(max, vw));
-      viewportEl.style.width = vw + "px";
-      viewportEl.style.maxWidth = "none";
+      var tw = Math.max(MIN, Math.min(rect.width - MIN, e.clientX - rect.left));
+      terminalEl.style.flexBasis = tw + "px";
+      fitScreen();
     });
     function endDrag(e) {
       if (!dragging) return;
@@ -648,6 +785,97 @@
     splitterEl.addEventListener("pointerup", endDrag);
     splitterEl.addEventListener("pointercancel", endDrag);
   })();
+
+  // ---------- touch input ----------
+  // Touches become the same keys the keyboard sends, so games only declare a `touch` map:
+  //   swipe: "once" (one key per swipe) | "drag" (one key per 24px moved)
+  //   tap:   key sent on tap; with cellAt()/cursorAt() the cursor is first walked to the tapped cell
+  //   hold:  key sent on long-press (after the same cursor walk)
+  //   keys:  [[label, key], ...] on-screen buttons
+  var SWIPE_PX = 24, HOLD_MS = 450;
+  function press(g, key) {
+    g.handleKey({ key: key });
+    updateStatus();
+  }
+  function tapAt(g, x, y, key) {
+    if (g.cellAt) {
+      var rect = screenEl.getBoundingClientRect();
+      var fs = parseFloat(getComputedStyle(screenEl).fontSize);
+      var cell = g.cellAt(Math.floor((y - rect.top) / (fs * LINE_H)), Math.floor((x - rect.left) / (fs * CHAR_W)));
+      if (!cell) return;
+      var cur = g.cursorAt(), dr = cell.r - cur.r, dc = cell.c - cur.c, i;
+      for (i = 0; i < Math.abs(dr); i++) press(g, dr > 0 ? "ArrowDown" : "ArrowUp");
+      for (i = 0; i < Math.abs(dc); i++) press(g, dc > 0 ? "ArrowRight" : "ArrowLeft");
+    }
+    if (key) press(g, key);
+  }
+  (function initTouch() {
+    var gest = null;
+    function touchGame() {
+      var g = shell.mode === "game" && shell.activeGame;
+      return g && g.touch ? g : null;
+    }
+    viewportEl.addEventListener("pointerdown", function (e) {
+      var g = touchGame();
+      if (!g || e.button > 0) return;
+      e.preventDefault();
+      try { viewportEl.setPointerCapture(e.pointerId); } catch (_) {}
+      var x = e.clientX, y = e.clientY;
+      gest = { x: x, y: y, lx: x, ly: y, done: false, timer: null };
+      if (g.touch.hold) {
+        gest.timer = setTimeout(function () { gest.done = true; tapAt(g, x, y, g.touch.hold); }, HOLD_MS);
+      }
+    });
+    viewportEl.addEventListener("pointermove", function (e) {
+      var g = touchGame();
+      if (!g || !gest) return;
+      var dx = e.clientX - gest.lx, dy = e.clientY - gest.ly;
+      if (Math.abs(e.clientX - gest.x) > 10 || Math.abs(e.clientY - gest.y) > 10) clearTimeout(gest.timer);
+      if (!g.touch.swipe || Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_PX) return;
+      if (g.touch.swipe === "once" && gest.done) return;
+      gest.done = true;
+      gest.lx = e.clientX; gest.ly = e.clientY;
+      press(g, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "ArrowRight" : "ArrowLeft") : (dy > 0 ? "ArrowDown" : "ArrowUp"));
+    });
+    function end(e) {
+      var g = touchGame();
+      if (!gest) return;
+      clearTimeout(gest.timer);
+      var moved = Math.abs(e.clientX - gest.x) > 10 || Math.abs(e.clientY - gest.y) > 10;
+      if (g && e.type === "pointerup" && !gest.done && !moved && g.touch.tap !== undefined) {
+        tapAt(g, e.clientX, e.clientY, g.touch.tap);
+      }
+      gest = null;
+    }
+    viewportEl.addEventListener("pointerup", end);
+    viewportEl.addEventListener("pointercancel", end);
+  })();
+
+  function buildTouchControls(g) {
+    touchEl.innerHTML = "";
+    var keys = (g.touch && g.touch.keys || []).concat([["restart", "restart"], ["quit", "quit"], ["log", "log"]]);
+    keys.forEach(function (k) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = k[0];
+      if (k[1] === "log") {
+        b.className = "logbtn";
+        b.setAttribute("aria-expanded", "false");
+      }
+      b.addEventListener("click", function () {
+        if (k[1] === "log") {
+          b.setAttribute("aria-expanded", String(appEl.classList.toggle("logopen")));
+          terminalEl.scrollTop = terminalEl.scrollHeight;
+          fitScreen();
+        } else if (k[1] === "restart" || k[1] === "quit") {
+          submitCommand(k[1]);
+        } else {
+          press(g, k[1]);
+        }
+      });
+      touchEl.appendChild(b);
+    });
+  }
 
   /* ============================================================
      GAME REGISTRY
@@ -734,7 +962,7 @@
       start: function () {
         begin();
         print("SNAKE // eat the * to grow. Don't hit walls or yourself.", "c");
-        print("Controls: Arrow keys / WASD = move | restart | quit", "dim");
+        print("Controls: Arrow keys / WASD or swipe = move | restart | quit", "dim");
       },
       stop: function () { tick.stop(); },
       restart: function () { tick.stop(); begin(); print("Snake restarted.", "m"); },
@@ -750,6 +978,7 @@
         nextDir = nd;
         return true;
       },
+      touch: { swipe: "once" },
       statusText: function () { return "SCORE: " + score + " | BEST: " + best; }
     };
   })();
@@ -889,7 +1118,8 @@
       start: function () {
         begin();
         print("TETRIS // clear full rows. Don't stack to the top.", "c");
-        print("Controls: Left/Right or A/D = move | Down/S = soft drop | Up/W/Space = rotate | restart | quit", "dim");
+        print("Controls: Left/Right or A/D = move | Down/S = soft drop | Enter = hard drop | Up/W/Space = rotate | restart | quit", "dim");
+        print("Touch: swipe = move / soft drop, tap = rotate", "dim");
       },
       stop: function () { tick.stop(); },
       restart: function () { tick.stop(); begin(); print("Tetris restarted.", "m"); },
@@ -906,6 +1136,10 @@
           if (!collide(cur.m, cur.x, cur.y + 1)) { cur.y++; } else { lock(); }
           render(); return true;
         }
+        if (e.key === "Enter") {
+          while (!collide(cur.m, cur.x, cur.y + 1)) cur.y++;
+          lock(); render(); return true;
+        }
         if (e.key === "ArrowUp" || k === "w" || e.key === " " || k === "spacebar") {
           var rm = rotateCW(cur.m);
           var kicks = [0, -1, 1, -2, 2];
@@ -916,6 +1150,7 @@
         }
         return false;
       },
+      touch: { swipe: "drag", tap: "ArrowUp", keys: [["rotate", "ArrowUp"], ["drop", "Enter"]] },
       statusText: function () { return "SCORE: " + score + " | LVL: " + level + " | BEST: " + best; }
     };
   })();
@@ -999,7 +1234,7 @@
       start: function () {
         reset(); render();
         print("SUDOKU // fill every row, column and 3x3 box with 1-9.", "c");
-        print("Controls: Arrows/WASD = move | 1-9 = enter | 0/Backspace/Delete = clear | restart | quit", "dim");
+        print("Controls: Arrows/WASD or tap = move | 1-9 = enter | 0/Backspace/Delete = clear | restart | quit", "dim");
       },
       restart: function () { reset(); render(); print("Sudoku restarted.", "m"); },
       handleKey: function (e) {
@@ -1018,6 +1253,14 @@
         }
         return false;
       },
+      // text line/column -> cell: borders every 4th line, "|" every 10th column
+      cellAt: function (line, col) {
+        var b = Math.floor((col - 1) / 10), w = (col - 1) % 10;
+        if (line < 1 || line > 11 || line % 4 === 0 || col < 1 || col > 29 || w === 9) return null;
+        return { r: line - Math.floor(line / 4) - 1, c: b * 3 + Math.floor(w / 3) };
+      },
+      cursorAt: function () { return cursor; },
+      touch: { tap: "", keys: "123456789".split("").map(function (d) { return [d, d]; }).concat([["clear", "0"]]) },
       statusText: function () { return "R" + (cursor.r + 1) + " C" + (cursor.c + 1); }
     };
   })();
@@ -1224,6 +1467,7 @@
         reset(); render();
         print("MINESWEEPER // reveal all safe cells. 10 mines hidden.", "c");
         print("Controls: Arrows/WASD = move | Enter/Space = reveal | F = flag | restart | quit", "dim");
+        print("Touch: tap = reveal, long-press = flag", "dim");
       },
       restart: function () { reset(); render(); print("Minesweeper restarted.", "m"); },
       handleKey: function (e) {
@@ -1232,6 +1476,12 @@
         if (e.key.toLowerCase() === "f") { toggleFlag(); return true; }
         return false;
       },
+      cellAt: function (line, col) {
+        var r = line - 2, c = Math.floor((col - 4) / 3);
+        return inBounds(r, c) ? { r: r, c: c } : null;
+      },
+      cursorAt: function () { return cursor; },
+      touch: { tap: " ", hold: "f" },
       statusText: function () { return "FLAGS: " + flagCount + "/" + MINES; }
     };
   })();
@@ -1359,7 +1609,7 @@
       start: function () {
         reset(); render();
         print("2048 // combine matching tiles. Reach the 2048 tile.", "c");
-        print("Controls: Arrows/WASD = move tiles | restart | quit", "dim");
+        print("Controls: Arrows/WASD or swipe = move tiles | restart | quit", "dim");
       },
       restart: function () { reset(); render(); print("2048 restarted.", "m"); },
       handleKey: function (e) {
@@ -1370,6 +1620,7 @@
         if (e.key === "ArrowDown" || k === "s") { move("down"); updateStatus(); return true; }
         return false;
       },
+      touch: { swipe: "once" },
       statusText: function () { return "SCORE: " + score + " | BEST: " + shownBest(); }
     };
   })();
@@ -1518,7 +1769,7 @@
         scores = { X: 0, O: 0, draws: 0 };
         reset(); render();
         print("TIC-TAC-TOE // two players, X and O take turns.", "c");
-        print("Controls: Arrows/WASD = move | 1-9 = place | Enter/Space = place at cursor | restart | quit", "dim");
+        print("Controls: Arrows/WASD = move | 1-9 = place | Enter/Space or tap = place | restart | quit", "dim");
       },
       restart: function () { reset(); render(); print("New round. Player X starts.", "m"); },
       handleKey: function (e) {
@@ -1531,6 +1782,9 @@
         if (/^[1-9]$/.test(e.key)) { cursor = Number(e.key) - 1; place(cursor); updateStatus(); return true; }
         return false;
       },
+      cellAt: function (line, col) { return line < 5 && col < 11 ? { r: Math.floor(line / 2), c: Math.floor(col / 4) } : null; },
+      cursorAt: function () { return { r: (cursor / 3) | 0, c: cursor % 3 }; },
+      touch: { tap: "Enter" },
       statusText: function () {
         if (over) return winner === "draw" ? "DRAW | X " + scores.X + " O " + scores.O
           : "WINNER: " + winner + " | X " + scores.X + " O " + scores.O;
@@ -1823,17 +2077,33 @@
 
   function boot() {
     updateStatus();
-    var i = 0;
-    (function next() {
+    var i = 0, timer = null;
+    function next() {
       if (i < BOOT_LINES.length) {
         print(BOOT_LINES[i].t, BOOT_LINES[i].c);
         i++;
-        setTimeout(next, 420);
+        timer = setTimeout(next, 420);
       } else {
+        document.removeEventListener("keydown", skip, true);
+        document.removeEventListener("pointerdown", skip, true);
         showMenu();
         focusInput();
       }
-    })();
+    }
+    // any key or tap skips the rest of the boot lines
+    function skip(e) {
+      if (e.type === "keydown") {
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      clearTimeout(timer);
+      for (; i < BOOT_LINES.length; i++) print(BOOT_LINES[i].t, BOOT_LINES[i].c);
+      next();
+    }
+    document.addEventListener("keydown", skip, true);
+    document.addEventListener("pointerdown", skip, true);
+    next();
   }
 
   // GAMES is fully populated above; safe to boot now.

@@ -53,13 +53,18 @@ Names have aliases: `mines`, `ttt`, `matrix`, `cow`, `train` and a few more.
 
 Controls are printed when each game starts:
 
-- **Snake, Tetris, 2048:** arrow keys or WASD. In Tetris, Up/W/Space rotates and Down/S soft-drops.
+- **Snake, Tetris, 2048:** arrow keys or WASD. In Tetris, Up/W/Space rotates, Down/S soft-drops and Enter hard-drops.
 - **Sudoku, Minesweeper, Tic-Tac-Toe:** arrows or WASD move the cursor. Digits fill Sudoku cells or place a Tic-Tac-Toe mark; Enter/Space reveals and F flags in Minesweeper.
+- **Touch:** swipe for Snake, 2048 and Tetris (tap or the rotate button rotates, drop hard-drops). Tap a cell in Sudoku (then the digit pad), Minesweeper (long-press flags) and Tic-Tac-Toe. The mouse can click cells too.
 - **Hanoi:** type `from to`, e.g. `1 3`.
 - **Hangman, cowsay, lolcat:** type text and press Enter.
 
-Single-key game controls are only captured while the prompt is empty, so you
-can still type commands mid-game.
+Menu entries are clickable, Up/Down walk the command history and Tab completes
+commands and names. A line that is a command or a launch name/number always
+goes to the shell, even mid-game, so `snake` in cowsay launches Snake and
+`2048` in Sudoku launches 2048. A game key that could start a command (the `s`
+in Snake) still moves the game and stays in the prompt for 0.7 s, so typing on
+continues the command.
 
 ## Run it locally
 
@@ -86,6 +91,9 @@ with the same shape:
   stop(),               // only when a timer must be cleared
   handleKey(event),     // optional: real-time or cursor input
   handleCommand(text),  // optional: typed input (Hanoi moves, Hangman letters)
+  touch,                // optional: { swipe, tap, hold, keys } mapping touches to keys
+  cellAt(line, col),    // optional: text position -> board cell, for tap-to-move
+  cursorAt(),           // optional: current cursor cell
   statusText()          // optional: live status bar text
 }
 ```
@@ -120,7 +128,8 @@ you open from disk loads nothing from the network.
 
 ## Known limitations
 
-- Keyboard only. There are no touch controls yet, so the games are not playable on a phone.
+- On a phone, Hangman, Hanoi, cowsay and lolcat are played by typing in the prompt (the on-screen keyboard opens); they have no tap controls.
+- Two digits typed within 0.7 s in Tic-Tac-Toe or Sudoku (say `1` then `2`) are read as the launch number `12` instead of two moves.
 - The game boards are not exposed to screen readers. With `prefers-reduced-motion` on, the CRT flicker, cursor blink and lolcat colour cycling stop, but the animated toys you launch still move.
 - Sudoku has a single built-in puzzle.
 
