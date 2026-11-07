@@ -1,0 +1,14 @@
+{
+  "name": "neonarc",
+  "private": true,
+  "type": "module",
+  "description": "A terminal-style arcade in the browser: plain text, no framework, no dependencies.",
+  "scripts": {
+    "test": "node --test",
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
