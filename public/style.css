@@ -1,0 +1,391 @@
+/* NeonArc. Every colour is a theme token; a theme only swaps tokens (see [data-theme]).
+   Board text uses the palette classes at the bottom (.hi, .alt, ...), never inline styles. */
+
+:root,
+[data-theme="neon"] {
+  --bg: #07030f;
+  --fg: #3dff9a;   /* body text, board frame */
+  --hi: #00f0ff;   /* brand, prompt, clues, cursor */
+  --alt: #ff2bd6;  /* the log, tools */
+  --soft: #a45bff; /* the board panel, echoed commands */
+  --warn: #ffd166;
+  --bad: #ff5470;
+  --orange: #ff9f45;
+  --lime: #9dff3d;
+  --blue: #6ea8ff;
+  --white: #ffffff;
+  --dim: #7f91a2;
+  --mx0: #eafff2; --mx1: #9dffcf; --mx2: #3dff9a; --mx3: #22b56b; --mx4: #0d6b3f;
+  --glow: 8px;
+  color-scheme: dark;
+}
+
+/* green phosphor (P1): one hue, brightness carries the meaning */
+[data-theme="phosphor"] {
+  --bg: #010802;
+  --fg: #33ff66;
+  --hi: #a4ffbe;
+  --alt: #22d655;
+  --soft: #1fb84a;
+  --warn: #ccffd9;
+  --bad: #ffffff;
+  --orange: #66ff8c;
+  --lime: #8cffaa;
+  --blue: #4dff79;
+  --white: #e6ffec;
+  --dim: #3f9a58;
+  --mx0: #e6ffec; --mx1: #a4ffbe; --mx2: #33ff66; --mx3: #1f9e40; --mx4: #0e5220;
+  --glow: 6px;
+}
+
+/* amber phosphor (P3) */
+[data-theme="amber"] {
+  --bg: #0a0600;
+  --fg: #ffb000;
+  --hi: #ffd27a;
+  --alt: #ff9500;
+  --soft: #d98a00;
+  --warn: #fff0c2;
+  --bad: #ffffff;
+  --orange: #ffc040;
+  --lime: #ffe08a;
+  --blue: #ffa31a;
+  --white: #fff7e0;
+  --dim: #a67c2e;
+  --mx0: #fff7e0; --mx1: #ffd27a; --mx2: #ffb000; --mx3: #a86f00; --mx4: #5c3c00;
+  --glow: 6px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background:
+    radial-gradient(1200px 700px at 70% -10%, color-mix(in srgb, var(--soft) 18%, transparent), transparent 60%),
+    radial-gradient(900px 600px at 0% 110%, color-mix(in srgb, var(--hi) 12%, transparent), transparent 55%),
+    var(--bg);
+  color: var(--fg);
+  font-family: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", monospace;
+  font-size: 15px;
+  line-height: 1.35;
+  overflow: hidden;
+}
+
+/* CRT flicker over the whole app */
+#app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  gap: 10px;
+  animation: crtFlicker 6s infinite steps(60);
+}
+
+@keyframes crtFlicker {
+  0%, 100% { opacity: 1; }
+  47% { opacity: 0.99; }
+  48% { opacity: 0.93; }
+  49% { opacity: 1; }
+  92% { opacity: 0.97; }
+  93% { opacity: 1; }
+}
+
+/* Scanline overlay */
+.scanlines {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.16) 3px, transparent 4px);
+  mix-blend-mode: overlay;
+}
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 120% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+header.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--hi);
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--hi) 6%, transparent), transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--hi) 25%, transparent), inset 0 0 18px color-mix(in srgb, var(--hi) 6%, transparent);
+}
+header.topbar .brand {
+  font-weight: 700;
+  letter-spacing: 6px;
+  font-size: 22px;
+  color: var(--hi);
+  text-shadow: 0 0 8px var(--hi), 0 0 20px color-mix(in srgb, var(--hi) 60%, transparent);
+}
+header.topbar .topright {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+header.topbar .tag {
+  color: var(--alt);
+  letter-spacing: 2px;
+  font-size: 12px;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--alt) 70%, transparent);
+}
+.themebtn {
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 1px;
+  min-height: 28px;
+  padding: 2px 10px;
+  color: var(--hi);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--hi) 50%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.themebtn::before { content: "\25D0  "; }
+.themebtn:hover { background: color-mix(in srgb, var(--hi) 12%, transparent); }
+header.topbar .ghlink {
+  display: inline-flex;
+  align-items: center;
+  color: var(--hi);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--hi) 50%, transparent));
+  transition: color 0.15s ease, filter 0.15s ease, transform 0.15s ease;
+}
+header.topbar .ghlink:hover {
+  color: var(--white);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--hi) 90%, transparent));
+  transform: translateY(-1px);
+}
+
+main {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  min-height: 0;
+}
+
+/* Terminal log */
+#terminal {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  border: 1px solid var(--alt);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--alt) 5%, transparent), rgba(0, 0, 0, 0.2));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--alt) 18%, transparent), inset 0 0 22px rgba(0, 0, 0, 0.5);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Game viewport */
+#viewport {
+  flex: 1;
+  min-width: 0;
+  display: none;
+  touch-action: none; /* swipes and taps go to the game, not page scroll or zoom */
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--soft) 6%, transparent), rgba(0, 0, 0, 0.25));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--soft) 25%, transparent), inset 0 0 22px rgba(0, 0, 0, 0.5);
+  overflow: auto;
+}
+#app.game #terminal { flex: 0 0 clamp(220px, 28%, 380px); }
+#app.game #viewport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#screen {
+  margin: 0;
+  white-space: pre;
+  font-family: inherit;
+  color: var(--fg);
+  font-size: 16px; /* fitScreen() sizes it to the board */
+  line-height: 1.2;
+  transition: opacity 0.15s ease;
+}
+#app.paused #screen { opacity: 0.45; }
+
+/* Draggable splitter between log and board */
+.splitter {
+  display: none;
+  flex: 0 0 8px;
+  align-self: stretch;
+  cursor: col-resize;
+  border-radius: 6px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--hi) 30%, transparent), color-mix(in srgb, var(--alt) 30%, transparent));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--hi) 30%, transparent);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+#app.game .splitter { display: block; }
+.splitter:hover,
+.splitter:focus-visible,
+.splitter.dragging {
+  outline: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--hi) 70%, transparent), color-mix(in srgb, var(--alt) 70%, transparent));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--hi) 60%, transparent);
+}
+
+/* Glow: one rule for all lit text, coloured by the text itself */
+#terminal .line,
+#screen,
+#screen span,
+.prompt,
+#cmd {
+  text-shadow: 0 0 var(--glow) color-mix(in srgb, currentColor 55%, transparent);
+}
+#terminal .dim,
+#screen .dim { text-shadow: none; }
+
+/* Clickable menu entries */
+.link { cursor: pointer; }
+.link:hover,
+.link:focus { text-decoration: underline; outline: none; }
+
+:focus-visible { outline: 1px dashed var(--hi); outline-offset: 2px; }
+
+/* Touch controls (shown on small or touch screens while a game runs) */
+#touch { display: none; flex-wrap: wrap; gap: 6px; justify-content: center; }
+#touch button {
+  flex: 1 0 auto;
+  min-width: max(44px, 17%); /* digit pads wrap five to a row */
+  min-height: 44px;
+  padding: 6px 4px;
+  font: inherit;
+  color: var(--hi);
+  background: color-mix(in srgb, var(--hi) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hi) 50%, transparent);
+  border-radius: 6px;
+  touch-action: manipulation;
+}
+#touch button:active { background: color-mix(in srgb, var(--hi) 20%, transparent); }
+#touch .logbtn { display: none; }
+
+/* Input row */
+.inputrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--hi);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--hi) 4%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--hi) 18%, transparent);
+}
+.prompt { color: var(--hi); font-weight: 700; }
+#cmd {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 15px;
+  caret-color: var(--fg);
+}
+#cmd::placeholder { color: var(--dim); text-shadow: none; opacity: 1; }
+.cursor {
+  width: 10px;
+  height: 18px;
+  background: var(--fg);
+  box-shadow: 0 0 10px var(--fg);
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+.inputrow:focus-within .cursor { display: none; }
+
+/* Status bar */
+.status {
+  border: 1px solid var(--fg);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  letter-spacing: 1px;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--fg) 15%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status b { color: var(--hi); }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.noscript { position: fixed; inset: auto 0 50% 0; text-align: center; color: var(--warn); }
+
+/* Scrollbars */
+#terminal::-webkit-scrollbar,
+#viewport::-webkit-scrollbar { width: 8px; }
+#terminal::-webkit-scrollbar-thumb,
+#viewport::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--hi) 40%, transparent);
+  border-radius: 8px;
+}
+
+/* Palette classes for log lines and board text */
+.hi { color: var(--hi); }
+.alt { color: var(--alt); }
+.soft { color: var(--soft); }
+.fg { color: var(--fg); }
+.warn { color: var(--warn); }
+.bad { color: var(--bad); }
+.orange { color: var(--orange); }
+.lime { color: var(--lime); }
+.blue { color: var(--blue); }
+.white { color: var(--white); }
+.dim { color: var(--dim); }
+.mx0 { color: var(--mx0); }
+.mx1 { color: var(--mx1); }
+.mx2 { color: var(--mx2); }
+.mx3 { color: var(--mx3); }
+.mx4 { color: var(--mx4); }
+
+@media (prefers-reduced-motion: reduce) {
+  #app, .cursor { animation: none; }
+  header.topbar .ghlink, .splitter, #screen { transition: none; }
+}
+
+@media (pointer: coarse) {
+  .link { padding: 4px 0; } /* bigger tap targets in the menu */
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  #app.game #touch { display: flex; }
+}
+
+@media (max-width: 720px) {
+  #app { padding: 10px; gap: 8px; }
+  main { flex-direction: column; gap: 8px; }
+  .splitter { display: none !important; }
+  header.topbar .tag { display: none; }
+  /* board first, a 2-line log under it (tap "log" to expand), then the touch controls */
+  #app.game #viewport { order: 1; padding: 6px; }
+  #app.game #terminal {
+    order: 2;
+    flex: 0 0 auto !important;
+    padding: 2px 10px; /* thin padding: scrolled lines show through it, so a big one shows half a line */
+    max-height: calc(2.7em + 6px);
+  }
+  #app.game.logopen #terminal { max-height: 45%; }
+  #touch .logbtn { display: block; }
+}
