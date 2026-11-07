@@ -167,8 +167,8 @@ under `neonarc.*`. Nothing else is stored.
 
 The site is static assets on Cloudflare Workers, configured in
 [`wrangler.jsonc`](wrangler.jsonc). CI runs the tests on every push and pull
-request, and deploys `main` when the repo has the `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID` secrets.
+request. It deploys `main` once the repo has the `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` secrets and the variable `DEPLOY_ENABLED=true`.
 
 On `neonarc.cybrsmr.xyz` the page loads Cloudflare Web Analytics, which is
 cookieless and counts page views. A local copy loads nothing from the network.
