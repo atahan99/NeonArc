@@ -11,7 +11,8 @@ Thumbs.db
 # Logs
 *.log
 
-# Local Cloudflare deploy config
-wrangler.jsonc
-.assetsignore
+# Tooling
+node_modules/
 .wrangler/
+.claude/
+.impeccable/
